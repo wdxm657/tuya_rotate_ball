@@ -82,15 +82,15 @@ extern unsigned int ota_program_offset;
 
 // PIN
 #ifndef BOARD_POWER_ON_PIN
-#define BOARD_POWER_ON_PIN                      (TUYA_GPIO_NUM_26)
+#define BOARD_POWER_ON_PIN                      (TUYA_GPIO_NUM_31) // D7
 #endif
 
 #ifndef BOARD_KEY_PIN
-#define BOARD_KEY_PIN                           (TUYA_GPIO_NUM_28)
+#define BOARD_KEY_PIN                           (TUYA_GPIO_NUM_17) // C1
 #endif
 
 #ifndef BOARD_LOG_TX_PIN
-#define BOARD_LOG_TX_PIN                        (TUYA_GPIO_NUM_0)
+#define BOARD_LOG_TX_PIN                        (TUYA_GPIO_NUM_9)  // B1
 #endif
 
 // IRQ NUM
@@ -112,7 +112,7 @@ extern unsigned int ota_program_offset;
 #endif
 
 #ifndef BOARD_LOG_BAUD_RATE
-#define BOARD_LOG_BAUD_RATE                     (1000000)
+#define BOARD_LOG_BAUD_RATE                     (115200)
 #endif
 
 #ifndef ENABLE_SCAN

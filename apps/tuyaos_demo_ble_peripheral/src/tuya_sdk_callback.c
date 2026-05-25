@@ -39,6 +39,7 @@
 #include "app_config.h"
 #include "app_product_test.h"
 #include "app_key.h"
+#include "app_led.h"
 
 /***********************************************************************
  ********************* constant ( macro and enum ) *********************
@@ -267,6 +268,10 @@ OPERATE_RET tuya_init_first(VOID_T)
         .level = TUYA_GPIO_LEVEL_LOW,
     };
     tal_gpio_init(BOARD_POWER_ON_PIN, &gpio_cfg);
+    tal_gpio_init(TUYA_GPIO_NUM_18, &gpio_cfg);
+    tal_gpio_init(TUYA_GPIO_NUM_19, &gpio_cfg);
+    tal_gpio_init(TUYA_GPIO_NUM_26, &gpio_cfg);
+
     tal_gpio_write(BOARD_POWER_ON_PIN, TUYA_GPIO_LEVEL_HIGH);
 #endif
 
@@ -297,6 +302,7 @@ OPERATE_RET tuya_init_third(VOID_T)
 {
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
     app_key_init();
+    app_led_timer_init();
 
     TUYA_WAKEUP_SOURCE_BASE_CFG_T wakeup_cfg = {
         .source = TUYA_WAKEUP_SOURCE_GPIO,
@@ -305,12 +311,12 @@ OPERATE_RET tuya_init_third(VOID_T)
     };
     tkl_wakeup_source_set(&wakeup_cfg);
 
-    TUYA_IIC_BASE_CFG_T iic_cfg = {
-        .role = TUYA_IIC_MODE_MASTER,
-        .speed = TUYA_IIC_BUS_SPEED_400K,
-        .addr_width = TUYA_IIC_ADDRESS_7BIT,
-    };
-    tal_i2c_init(TUYA_I2C_NUM_0, &iic_cfg);
+    // TUYA_IIC_BASE_CFG_T iic_cfg = {
+    //     .role = TUYA_IIC_MODE_MASTER,
+    //     .speed = TUYA_IIC_BUS_SPEED_400K,
+    //     .addr_width = TUYA_IIC_ADDRESS_7BIT,
+    // };
+    // tal_i2c_init(TUYA_I2C_NUM_0, &iic_cfg);
 #endif
 
     return OPRT_OK;
@@ -318,22 +324,22 @@ OPERATE_RET tuya_init_third(VOID_T)
 
 OPERATE_RET tuya_init_last(VOID_T)
 {
-    tal_uart_init(TUYA_UART_NUM_0, &tal_uart_cfg);
+    // tal_uart_init(TUYA_UART_NUM_0, &tal_uart_cfg);
 
     tuya_ble_protocol_init();
 
-    tal_uart_rx_reg_irq_cb(TUYA_UART_NUM_0, tuya_uart_irq_rx_cb);
+    // tal_uart_rx_reg_irq_cb(TUYA_UART_NUM_0, tuya_uart_irq_rx_cb);
 
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
-    tal_sdk_test_init();
+    // tal_sdk_test_init();
 #endif
 
     tal_ble_advertising_start(&tal_adv_param);
 
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
-    if (tal_oled_init() == OPRT_OK) {
-        tal_oled_show_string(12, 1, (VOID_T*)"TuyaOS Demo", 16);
-    }
+    // if (tal_oled_init() == OPRT_OK) {
+    //     tal_oled_show_string(12, 1, (VOID_T*)"TuyaOS Demo", 16);
+    // }
 
     tal_cpu_sleep_callback_register(&tal_sleep_cb);
 
@@ -341,6 +347,7 @@ OPERATE_RET tuya_init_last(VOID_T)
     tuya_ble_bulkdata_cb.report_cb = tuya_ble_bulkdata_report_cb;
     tuya_ble_bulk_data_init(&tuya_ble_external_param, &tuya_ble_bulkdata_cb);
 
+    app_led_timer_start();
 #if defined(APP_PRODUCT_TEST) && (APP_PRODUCT_TEST == 1)
     app_product_test_init();
 #endif // APP_PRODUCT_TEST

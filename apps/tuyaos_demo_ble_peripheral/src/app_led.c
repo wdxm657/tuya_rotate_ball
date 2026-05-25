@@ -8,7 +8,6 @@
  *
  */
 
-
 #include "tal_log.h"
 #include "tal_sw_timer.h"
 #include "tal_gpio.h"
@@ -17,11 +16,9 @@
  ********************* constant ( macro and enum ) *********************
  **********************************************************************/
 
-
 /***********************************************************************
  ********************* struct ******************************************
  **********************************************************************/
-
 
 /***********************************************************************
  ********************* variable ****************************************
@@ -34,34 +31,46 @@ STATIC UINT32_T s_app_led_count = 0;
  ********************* function ****************************************
  **********************************************************************/
 
-
-
+#define LED_R TUYA_GPIO_NUM_18 // C2
+#define LED_G TUYA_GPIO_NUM_19 // C3
+#define LED_B TUYA_GPIO_NUM_26 // D2
 
 STATIC VOID_T app_led_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
 {
-    tal_gpio_write(17, (s_app_led_count == 0));
-    tal_gpio_write(18, (s_app_led_count == 1));
-    tal_gpio_write(19, (s_app_led_count == 2));
-    tal_gpio_write(20, (s_app_led_count == 3));
+    tal_gpio_write(LED_R, (s_app_led_count == 0));
+    tal_gpio_write(LED_G, (s_app_led_count == 1));
+    tal_gpio_write(LED_B, (s_app_led_count == 2));
+    // tal_gpio_write(20, (s_app_led_count == 3));
+    TAL_PR_INFO("app_led_timeout_handler: %d", s_app_led_count);
 
     s_app_led_count++;
-    if (s_app_led_count == 4) {
+    if (s_app_led_count == 3)
+    {
         s_app_led_count = 0;
     }
 }
 
 VOID_T app_led_timer_init(VOID_T)
 {
+    TUYA_GPIO_BASE_CFG_T gpio_cfg = {
+        .mode = TUYA_GPIO_PUSH_PULL,
+        .direct = TUYA_GPIO_OUTPUT,
+        .level = TUYA_GPIO_LEVEL_HIGH,
+    };
+    tal_gpio_init(LED_R, &gpio_cfg);
+    tal_gpio_init(LED_G, &gpio_cfg);
+    tal_gpio_init(LED_B, &gpio_cfg);
     tal_sw_timer_create(app_led_timeout_handler, NULL, &app_led_timer_id);
 }
 
 VOID_T app_led_timer_start(VOID_T)
 {
+    TAL_PR_INFO("app_led_timer_start");
     tal_sw_timer_start(app_led_timer_id, 200, TAL_TIMER_CYCLE);
 }
 
 VOID_T app_led_timer_stop(VOID_T)
 {
+    TAL_PR_INFO("app_led_timer_stop");
     tal_sw_timer_stop(app_led_timer_id);
 }
-
