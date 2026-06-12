@@ -69,6 +69,7 @@ OPERATE_RET app_dp_parser(UINT8_T* buf, UINT32_T size)
         } break;
 
         default: {
+            TAL_PR_DEBUG("invalid dp_id: %d", g_cmd.dp_id);
         } break;
     }
 
