@@ -66,7 +66,7 @@ VOID_T app_led_timer_init(VOID_T)
 VOID_T app_led_timer_start(VOID_T)
 {
     TAL_PR_INFO("app_led_timer_start");
-    tal_sw_timer_start(app_led_timer_id, 200, TAL_TIMER_CYCLE);
+    tal_sw_timer_start(app_led_timer_id, 1000, TAL_TIMER_CYCLE);
 }
 
 VOID_T app_led_timer_stop(VOID_T)
