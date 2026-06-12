@@ -262,16 +262,13 @@ OPERATE_RET app_config_info_set(VOID_T)
 OPERATE_RET tuya_init_first(VOID_T)
 {
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
+// 测试上电时序，上电后先打开一个GPIO输出高电平
     TUYA_GPIO_BASE_CFG_T gpio_cfg = {
         .mode = TUYA_GPIO_PUSH_PULL,
         .direct = TUYA_GPIO_OUTPUT,
         .level = TUYA_GPIO_LEVEL_LOW,
     };
     tal_gpio_init(BOARD_POWER_ON_PIN, &gpio_cfg);
-    tal_gpio_init(TUYA_GPIO_NUM_18, &gpio_cfg);
-    tal_gpio_init(TUYA_GPIO_NUM_19, &gpio_cfg);
-    tal_gpio_init(TUYA_GPIO_NUM_26, &gpio_cfg);
-
     tal_gpio_write(BOARD_POWER_ON_PIN, TUYA_GPIO_LEVEL_HIGH);
 #endif
 
@@ -302,7 +299,7 @@ OPERATE_RET tuya_init_third(VOID_T)
 {
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
     app_key_init();
-    app_led_timer_init();
+    // app_led_timer_init();
 
     TUYA_WAKEUP_SOURCE_BASE_CFG_T wakeup_cfg = {
         .source = TUYA_WAKEUP_SOURCE_GPIO,
@@ -319,19 +316,36 @@ OPERATE_RET tuya_init_third(VOID_T)
     // tal_i2c_init(TUYA_I2C_NUM_0, &iic_cfg);
 #endif
 
+// 初始化输出高电平引脚
+    TUYA_GPIO_BASE_CFG_T gpio_cfg = {
+        .mode = TUYA_GPIO_PUSH_PULL,
+        .direct = TUYA_GPIO_OUTPUT,
+        .level = TUYA_GPIO_LEVEL_HIGH,
+    };
+    tal_gpio_init(LED_R, &gpio_cfg);
+    tal_gpio_init(LED_G, &gpio_cfg);
+    tal_gpio_init(LED_B, &gpio_cfg);
+    tal_gpio_init(AD_BAT_SWITCH, &gpio_cfg);
+    tal_gpio_init(CHARGE_SWITCH, &gpio_cfg);
+// 初始化输出低电平引脚
+    gpio_cfg.level = TUYA_GPIO_LEVEL_LOW;
+    tal_gpio_init(M_INA, &gpio_cfg);
+    tal_gpio_init(M_INB, &gpio_cfg);
+
     return OPRT_OK;
 }
 
 OPERATE_RET tuya_init_last(VOID_T)
 {
-    // tal_uart_init(TUYA_UART_NUM_0, &tal_uart_cfg);
+    // PB1 TX   PB7 RX
+    tal_uart_init(TUYA_UART_NUM_0, &tal_uart_cfg);
 
     tuya_ble_protocol_init();
 
-    // tal_uart_rx_reg_irq_cb(TUYA_UART_NUM_0, tuya_uart_irq_rx_cb);
+    tal_uart_rx_reg_irq_cb(TUYA_UART_NUM_0, tuya_uart_irq_rx_cb);
 
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
-    // tal_sdk_test_init();
+    tal_sdk_test_init();
 #endif
 
     tal_ble_advertising_start(&tal_adv_param);
@@ -347,7 +361,7 @@ OPERATE_RET tuya_init_last(VOID_T)
     tuya_ble_bulkdata_cb.report_cb = tuya_ble_bulkdata_report_cb;
     tuya_ble_bulk_data_init(&tuya_ble_external_param, &tuya_ble_bulkdata_cb);
 
-    app_led_timer_start();
+    // app_led_timer_start();
 #if defined(APP_PRODUCT_TEST) && (APP_PRODUCT_TEST == 1)
     app_product_test_init();
 #endif // APP_PRODUCT_TEST

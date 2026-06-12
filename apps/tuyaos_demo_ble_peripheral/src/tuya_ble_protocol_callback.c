@@ -43,21 +43,29 @@
 /***********************************************************************
  ********************* variable ****************************************
  **********************************************************************/
+// STATIC tuya_ble_device_param_t tuya_ble_protocol_param = {
+// #if (TUYA_SDK_DEBUG_MODE)
+//     .use_ext_license_key = 1, //1-info in tuya_ble_protocol_callback.h, 0-auth info
+//     .device_id_len       = DEVICE_ID_LEN,
+// #else
+//     .use_ext_license_key = 0,
+//     .device_id_len       = 0,
+// #endif
+//     .p_type              = TUYA_BLE_PRODUCT_ID_TYPE_PID,
+// #if (TUYA_BLE_PROD_SUPPORT_OEM_TYPE == TUYA_BLE_PROD_OEM_TYPE_NONE)
+//     .product_id_len      = 8,
+// #else
+//     .product_id_len      = 0,
+// #endif
+//     .adv_local_name_len  = 4,
+// };
+
 STATIC tuya_ble_device_param_t tuya_ble_protocol_param = {
-#if (TUYA_SDK_DEBUG_MODE)
-    .use_ext_license_key = 1, //1-info in tuya_ble_protocol_callback.h, 0-auth info
-    .device_id_len       = DEVICE_ID_LEN,
-#else
-    .use_ext_license_key = 0,
-    .device_id_len       = 0,
-#endif
+    .use_ext_license_key = 1, //1-info in tuya_ble_sdk_demo.h, 0-auth info
+    .device_id_len       = DEVICE_ID_LEN, //DEVICE_ID_LEN,
     .p_type              = TUYA_BLE_PRODUCT_ID_TYPE_PID,
-#if (TUYA_BLE_PROD_SUPPORT_OEM_TYPE == TUYA_BLE_PROD_OEM_TYPE_NONE)
     .product_id_len      = 8,
-#else
-    .product_id_len      = 0,
-#endif
-    .adv_local_name_len  = 4,
+    .adv_local_name_len = 4,
 };
 
 STATIC tuya_ble_timer_t disconnect_timer;

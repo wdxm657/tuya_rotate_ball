@@ -11,6 +11,7 @@
 #include "tal_log.h"
 #include "tal_sw_timer.h"
 #include "tal_gpio.h"
+#include "board.h"
 
 /***********************************************************************
  ********************* constant ( macro and enum ) *********************
@@ -31,17 +32,13 @@ STATIC UINT32_T s_app_led_count = 0;
  ********************* function ****************************************
  **********************************************************************/
 
-#define LED_R TUYA_GPIO_NUM_18 // C2
-#define LED_G TUYA_GPIO_NUM_19 // C3
-#define LED_B TUYA_GPIO_NUM_26 // D2
-
 STATIC VOID_T app_led_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
 {
-    tal_gpio_write(LED_R, (s_app_led_count == 0));
-    tal_gpio_write(LED_G, (s_app_led_count == 1));
-    tal_gpio_write(LED_B, (s_app_led_count == 2));
+    tal_gpio_write(LED_R, !(s_app_led_count == 0));
+    tal_gpio_write(LED_G, !(s_app_led_count == 1));
+    tal_gpio_write(LED_B, !(s_app_led_count == 2));
     // tal_gpio_write(20, (s_app_led_count == 3));
-    TAL_PR_INFO("app_led_timeout_handler: %d", s_app_led_count);
+    // TAL_PR_INFO("app_led_timeout_handler: %d", s_app_led_count);
 
     s_app_led_count++;
     if (s_app_led_count == 3)
