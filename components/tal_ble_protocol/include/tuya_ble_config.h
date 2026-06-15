@@ -194,7 +194,7 @@ extern "C" {
  */
 
 #ifndef TUYA_BLE_LOG_ENABLE
-#define TUYA_BLE_LOG_ENABLE                             0
+#define TUYA_BLE_LOG_ENABLE                             1
 #endif
 
 #ifndef TUYA_BLE_LOG_COLORS_ENABLE

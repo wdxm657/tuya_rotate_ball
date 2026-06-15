@@ -32,6 +32,7 @@
 #include "tuya_ble_main.h"
 #include "tuya_sdk_callback.h"
 #include "tuya_ble_protocol_callback.h"
+#include "tuya_ble_mutli_tsf_protocol.h"
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
 #include "tuya_ble_bulkdata_demo.h"
 #endif
@@ -40,6 +41,7 @@
 #include "app_product_test.h"
 #include "app_key.h"
 #include "app_led.h"
+#include "app_dp_parser.h"
 
 /***********************************************************************
  ********************* constant ( macro and enum ) *********************
@@ -57,6 +59,10 @@
  ********************* variable ****************************************
  **********************************************************************/
 UINT16_T tal_app_server_conn_handle = 0xFFFF;
+
+/* DP 测试：电池电量定时上报 */
+STATIC TIMER_ID s_battery_timer_id = NULL;
+STATIC UINT8_T  s_battery_level = 0;
 
 TAL_UART_CFG_T tal_uart_cfg = {
     .rx_buffer_size = 256,
@@ -89,14 +95,25 @@ STATIC TUYA_BLE_BULKDATA_EXTERNAL_PARAM_T tuya_ble_external_param = {
     .flag = NEED_PARSING_BY_APP,
 };
 STATIC TUYA_BLE_BULKDATA_CB_T tuya_ble_bulkdata_cb = {0};
-#endif
-
-/***********************************************************************
+#endif/***********************************************************************
  ********************* function ****************************************
  **********************************************************************/
 
+/* 电池电量定时回调：每秒 +1%，0~100 循环上报 */
+STATIC VOID_T battery_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
+{
+    UINT8_T buf[DT_VALUE_LEN] = {0};
+    buf[3] = s_battery_level;
 
+    app_dp_report(DP_ID_BATTERY, buf, DT_VALUE_LEN);
 
+    TAL_PR_DEBUG("battery report: %d%%", s_battery_level);
+
+    s_battery_level++;
+    if (s_battery_level > 100) {
+        s_battery_level = 0;
+    }
+}
 
 STATIC VOID_T tuya_ble_evt_callback(TAL_BLE_EVT_PARAMS_T *p_event)
 {
@@ -350,6 +367,10 @@ OPERATE_RET tuya_init_last(VOID_T)
 
     tal_ble_advertising_start(&tal_adv_param);
 
+    /* DP 测试：创建电池电量定时器，每30秒上报一次 */
+    tal_sw_timer_create(battery_report_timeout_handler, NULL, &s_battery_timer_id);
+    // tal_sw_timer_start(s_battery_timer_id, 30000, TAL_TIMER_CYCLE);
+
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
     // if (tal_oled_init() == OPRT_OK) {
     //     tal_oled_show_string(12, 1, (VOID_T*)"TuyaOS Demo", 16);
@@ -377,7 +398,7 @@ OPERATE_RET tuya_main_loop(VOID_T)
 #endif
 
 //    tal_watchdog_refresh();
-
+    
     return (tuya_ble_sleep_allowed_check() == TRUE);
 }
 

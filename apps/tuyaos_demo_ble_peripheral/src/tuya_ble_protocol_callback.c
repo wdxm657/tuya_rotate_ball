@@ -137,7 +137,7 @@ STATIC VOID_T tuya_ble_protocol_callback(tuya_ble_cb_evt_param_t* event)
         case TUYA_BLE_CB_EVT_DP_QUERY: {
 //            TAL_PR_HEXDUMP_INFO("TUYA_BLE_CB_EVT_DP_QUERY", event->dp_query_data.p_data, event->dp_query_data.data_len);
             UINT8_T led_on = 1;
-            app_dp_report(WR_BASIC_LED, &led_on, SIZEOF(UINT8_T));
+            // app_dp_report(WR_BASIC_LED, &led_on, SIZEOF(UINT8_T));
         } break;
 
         case TUYA_BLE_CB_EVT_OTA_DATA: {

@@ -61,12 +61,14 @@ STATIC VOID_T app_key_handler(UINT32_T state)
         //Short press
         case 1: {
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
+            TAL_PR_INFO("Wake up by key, start wakeup source test.");
             tal_ble_sdk_test_wake_up_handler();
 #endif
         } break;
 
         //Long press
         case 2: {
+            TAL_PR_INFO("Factory reset by long press, start factory reset.");
             tuya_ble_device_factory_reset();
             tuya_ble_disconnect_and_reset_timer_start();
         } break;

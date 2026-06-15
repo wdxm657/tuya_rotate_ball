@@ -20,13 +20,14 @@ extern "C" {
 /***********************************************************************
  ********************* constant ( macro and enum ) *********************
  **********************************************************************/
-//WR-write_report, OW-only_write, OR-only_report
-#define  WR_BASIC_LED                   101
-#define  WR_BASIC_CHARGE_STATE          102
-#define  WR_BASIC_TEMPERATURE           103
-#define  WR_BASIC_WELCOME               104
-#define  WR_BASIC_CUSTOM_DATA           105
-#define  WR_BASIC_FAULT_ALARM           106
+/** DP ID 定义 — 来自 afp FIFA football toy 产品配置 */
+/* rw: 可读写, ro: 只读 */
+#define  DP_ID_SWITCH            1   /* bool, rw — 开关 */
+#define  DP_ID_MODE              4   /* enum, rw — 工作模式: active/simple/mild */
+#define  DP_ID_BATTERY          18   /* value, ro — 电池电量 0~100% */
+#define  DP_ID_FAULT            20   /* bitmap, ro — 故障告警: bit0=battery_low, bit1=device_stuck */
+#define  DP_ID_MOVEMENT_LEVEL   22   /* enum, rw — 行进速度: level_1~level_5 */
+#define  DP_ID_WORK_STATE       26   /* enum, ro — 工作状态: work/standby/charging/charge_done */
 
 /***********************************************************************
  ********************* struct ******************************************

@@ -53,19 +53,16 @@ OPERATE_RET app_dp_parser(UINT8_T* buf, UINT32_T size)
     TAL_PR_HEXDUMP_INFO("dp_cmd", (VOID_T*)&g_cmd, (g_cmd.dp_data_len + 4));
 
     switch (g_cmd.dp_id) {
-        case WR_BASIC_LED: {
+        case DP_ID_SWITCH: {
+            TAL_PR_DEBUG("DP_ID_SWITCH: %d dp_data_len: %d", g_cmd.dp_data[0], g_cmd.dp_data_len);
         } break;
 
-        case WR_BASIC_CHARGE_STATE: {
+        case DP_ID_MODE: {
+            TAL_PR_DEBUG("DP_ID_MODE: %d dp_data_len: %d", g_cmd.dp_data[0], g_cmd.dp_data_len);
         } break;
 
-        case WR_BASIC_TEMPERATURE: {
-        } break;
-
-        case WR_BASIC_WELCOME: {
-        } break;
-
-        case WR_BASIC_CUSTOM_DATA: {
+        case DP_ID_MOVEMENT_LEVEL: {
+            TAL_PR_DEBUG("DP_ID_MOVEMENT_LEVEL: %d dp_data_len: %d", g_cmd.dp_data[0], g_cmd.dp_data_len);
         } break;
 
         default: {
@@ -85,46 +82,46 @@ OPERATE_RET app_dp_report(UINT8_T dp_id, UINT8_T* buf, UINT32_T size)
     g_rsp.dp_id = dp_id;
 
     switch (dp_id) {
-        //dp_type = bool
-        case WR_BASIC_LED: {
+        /* bool: 开关 */
+        case DP_ID_SWITCH: {
             g_rsp.dp_type = DT_BOOL;
             g_rsp.dp_data_len = DT_BOOL_LEN;
             memcpy(g_rsp.dp_data, buf, DT_BOOL_LEN);
         } break;
 
-        //dp_type = enum
-        case WR_BASIC_CHARGE_STATE: {
+        /* enum: 工作模式 active/simple/mild */
+        case DP_ID_MODE: {
             g_rsp.dp_type = DT_ENUM;
             g_rsp.dp_data_len = DT_ENUM_LEN;
             memcpy(g_rsp.dp_data, buf, DT_ENUM_LEN);
         } break;
 
-        //dp_type = value
-        case WR_BASIC_TEMPERATURE: {
+        /* value: 电池电量 0~100% */
+        case DP_ID_BATTERY: {
             g_rsp.dp_type = DT_VALUE;
             g_rsp.dp_data_len = DT_VALUE_LEN;
             memcpy(g_rsp.dp_data, buf, DT_VALUE_LEN);
         } break;
 
-        //dp_type = string
-        case WR_BASIC_WELCOME: {
-            g_rsp.dp_type = DT_STRING;
-            g_rsp.dp_data_len = size;
-            memcpy(g_rsp.dp_data, buf, size);
-        } break;
-
-        //dp_type = raw
-        case WR_BASIC_CUSTOM_DATA: {
-            g_rsp.dp_type = DT_RAW;
-            g_rsp.dp_data_len = size;
-            memcpy(g_rsp.dp_data, buf, size);
-        } break;
-
-        //dp_type = fault
-        case WR_BASIC_FAULT_ALARM: {
+        /* bitmap: 故障告警 */
+        case DP_ID_FAULT: {
             g_rsp.dp_type = DT_BITMAP;
             g_rsp.dp_data_len = DT_BITMAP_MAX;
             memcpy(g_rsp.dp_data, buf, DT_BITMAP_MAX);
+        } break;
+
+        /* enum: 行进速度 level_1~level_5 */
+        case DP_ID_MOVEMENT_LEVEL: {
+            g_rsp.dp_type = DT_ENUM;
+            g_rsp.dp_data_len = DT_ENUM_LEN;
+            memcpy(g_rsp.dp_data, buf, DT_ENUM_LEN);
+        } break;
+
+        /* enum: 工作状态 work/standby/charging/charge_done */
+        case DP_ID_WORK_STATE: {
+            g_rsp.dp_type = DT_ENUM;
+            g_rsp.dp_data_len = DT_ENUM_LEN;
+            memcpy(g_rsp.dp_data, buf, DT_ENUM_LEN);
         } break;
 
         default: {
