@@ -29,8 +29,8 @@ extern "C" {
 
 /** LED 显示模式 */
 typedef enum {
-    LED_MODE_OFF,           /**< 熄灭：关机/待机/满电 */
-    LED_MODE_BLUE_BLINK,    /**< 蓝牙未连接：蓝灯闪烁 */
+    LED_MODE_OFF,           /**< 熄灭：关机/待机 */
+    LED_MODE_BLUE_BLINK,    /**< 配网中：蓝灯闪烁 */
     LED_MODE_GREEN_BLINK,   /**< 工作状态：绿灯闪烁 */
     LED_MODE_RED_BLINK,     /**< 电量不足：红灯闪烁 */
     LED_MODE_RED_SOLID,     /**< 充电中：红灯常亮 */

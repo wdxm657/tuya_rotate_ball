@@ -30,6 +30,7 @@
 #include "app_state.h"
 #include "app_battery.h"
 #include "tuya_sdk_callback.h"
+#include "tuya_ble_main.h"
 
 /***********************************************************************
  ********************* constant ( macro and enum ) *********************
@@ -150,6 +151,7 @@ VOID_T app_led_init(VOID_T)
     s_led_mode = LED_MODE_OFF;
     s_led_on = FALSE;
 
+    app_led_update();
     TAL_PR_INFO("[led] initialized");
 }
 
@@ -240,7 +242,15 @@ VOID_T app_led_update(VOID_T)
     }
     else if (!app_state_is_powered_on())
     {
-        new_mode = LED_MODE_OFF;
+        /* 关机：据配网状态区分指示 — 已配网则灭灯，未配网则蓝灯闪烁提示 */
+        tuya_ble_connect_status_t conn_st = tuya_ble_connect_status_get();
+        if (conn_st == BONDING_UNCONN || conn_st == BONDING_CONN) {
+            TAL_PR_DEBUG("BOND");
+            new_mode = LED_MODE_OFF;
+        } else {
+            TAL_PR_DEBUG("UNBOND");
+            new_mode = LED_MODE_BLUE_BLINK;
+        }
     }
     // else if (app_state_get() == DEV_STATE_CHARGE_DONE)
     // {
@@ -252,15 +262,7 @@ VOID_T app_led_update(VOID_T)
     }
     else
     {
-        if (tuya_app_get_conn_handle() == 0xFFFF)
-        {
-            /* 蓝牙未连接 → 蓝灯闪烁 */
-            new_mode = LED_MODE_BLUE_BLINK;
-        }
-        else
-        {
-            new_mode = LED_MODE_GREEN_BLINK;
-        }
+        new_mode = LED_MODE_GREEN_BLINK;
     }
 
     app_led_set_mode(new_mode);
