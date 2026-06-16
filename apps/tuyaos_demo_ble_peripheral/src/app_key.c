@@ -121,7 +121,7 @@ STATIC tal_key_param_t key_press_param = {
  */
 STATIC VOID_T app_key_poll_handler(TIMER_ID timer_id, VOID_T *arg)
 {
-    // tal_key_timeout_handler(&key_press_param);
+    tal_key_timeout_handler(&key_press_param);
 }
 
 /***********************************************************************

@@ -18,6 +18,8 @@
 #include "tuya_ble_mutli_tsf_protocol.h"
 
 #include "app_dp_parser.h"
+#include "app_state.h"
+#include "app_motor.h"
 #include "app_led.h"
 
 /***********************************************************************
@@ -54,15 +56,24 @@ OPERATE_RET app_dp_parser(UINT8_T* buf, UINT32_T size)
 
     switch (g_cmd.dp_id) {
         case DP_ID_SWITCH: {
-            TAL_PR_DEBUG("DP_ID_SWITCH: %d dp_data_len: %d", g_cmd.dp_data[0], g_cmd.dp_data_len);
+            /* 蓝牙开关控制软件电源 */
+            BOOL_T sw_on = (g_cmd.dp_data[0] != 0);
+            TAL_PR_INFO("DP_ID_SWITCH: %s", sw_on ? "ON" : "OFF");
+            app_state_set_software_power(sw_on);
         } break;
 
         case DP_ID_MODE: {
-            TAL_PR_DEBUG("DP_ID_MODE: %d dp_data_len: %d", g_cmd.dp_data[0], g_cmd.dp_data_len);
+            /* 游戏模式设置 */
+            game_mode_t mode = (game_mode_t)g_cmd.dp_data[0];
+            TAL_PR_INFO("DP_ID_MODE: %d", mode);
+            if (mode <= GAME_MODE_INTERACTIVE) {
+                app_motor_set_mode(mode);
+            }
         } break;
 
         case DP_ID_MOVEMENT_LEVEL: {
-            TAL_PR_DEBUG("DP_ID_MOVEMENT_LEVEL: %d dp_data_len: %d", g_cmd.dp_data[0], g_cmd.dp_data_len);
+            TAL_PR_INFO("DP_ID_MOVEMENT_LEVEL: %d", g_cmd.dp_data[0]);
+            /* 产品定义中未使用，保留扩展 */
         } break;
 
         default: {
@@ -70,6 +81,10 @@ OPERATE_RET app_dp_parser(UINT8_T* buf, UINT32_T size)
         } break;
     }
 
+    /* 任何有效的 APP 指令都复位待机定时器 */
+    app_state_reset_standby_timer();
+
+    /* 对 rw DP 回复确认上报 */
     app_dp_report(g_cmd.dp_id, g_cmd.dp_data, g_cmd.dp_data_len);
 
     return OPRT_OK;

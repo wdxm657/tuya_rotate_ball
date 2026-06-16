@@ -42,6 +42,11 @@
 #include "app_key.h"
 #include "app_led.h"
 #include "app_dp_parser.h"
+#include "app_state.h"
+#include "app_motor.h"
+#include "app_battery.h"
+#include "app_charge.h"
+#include "app_vibration.h"
 
 /***********************************************************************
  ********************* constant ( macro and enum ) *********************
@@ -60,9 +65,11 @@
  **********************************************************************/
 UINT16_T tal_app_server_conn_handle = 0xFFFF;
 
-/* DP 测试：电池电量定时上报 */
-STATIC TIMER_ID s_battery_timer_id = NULL;
-STATIC UINT8_T  s_battery_level = 0;
+/* 电池电量DP定时上报（向APP周期性通知） */
+STATIC TIMER_ID s_battery_report_timer_id = NULL;
+
+/* 设备状态DP定时上报（向APP周期性通知 work_state） */
+STATIC TIMER_ID s_work_state_report_timer_id = NULL;
 
 TAL_UART_CFG_T tal_uart_cfg = {
     .rx_buffer_size = 256,
@@ -99,20 +106,53 @@ STATIC TUYA_BLE_BULKDATA_CB_T tuya_ble_bulkdata_cb = {0};
  ********************* function ****************************************
  **********************************************************************/
 
-/* 电池电量定时回调：每秒 +1%，0~100 循环上报 */
+/***********************************************************************
+ ********************* static callback wrappers ************************
+ **********************************************************************/
+
+/**
+ * @brief 状态变更 → LED 刷新（适配 app_state_register_change_cb 签名）
+ */
+STATIC VOID_T led_on_state_change(dev_state_t old_state, dev_state_t new_state)
+{
+    app_led_update();
+}
+
+/**
+ * @brief 临界低电 → 硬件关机（适配 app_battery_register_critical_cb 签名）
+ */
+STATIC VOID_T battery_critical_poweroff(VOID_T)
+{
+    /* 硬件关机（进入低功耗保护） */
+    app_state_set_power(FALSE);
+}
+
+/***********************************************************************
+ ********************* DP 定时上报 **************************************
+ **********************************************************************/
+
+/* 电池电量DP定时上报：读取缓存值，上报给APP */
 STATIC VOID_T battery_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
 {
     UINT8_T buf[DT_VALUE_LEN] = {0};
-    buf[3] = s_battery_level;
+    UINT8_T percent = app_battery_get_percent();
+
+    /* DT_VALUE: 4字节小端 int，第4字节为有效值 */
+    buf[3] = percent;
 
     app_dp_report(DP_ID_BATTERY, buf, DT_VALUE_LEN);
 
-    TAL_PR_DEBUG("battery report: %d%%", s_battery_level);
+    TAL_PR_DEBUG("[dp] battery report: %d%%", percent);
+}
 
-    s_battery_level++;
-    if (s_battery_level > 100) {
-        s_battery_level = 0;
-    }
+/* 设备状态DP定时上报 */
+STATIC VOID_T work_state_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
+{
+    UINT8_T state = app_state_get_dp_enum();
+
+    app_dp_report(DP_ID_WORK_STATE, &state, DT_ENUM_LEN);
+
+    TAL_PR_DEBUG("[dp] work_state report: %d", state);
 }
 
 STATIC VOID_T tuya_ble_evt_callback(TAL_BLE_EVT_PARAMS_T *p_event)
@@ -128,6 +168,9 @@ STATIC VOID_T tuya_ble_evt_callback(TAL_BLE_EVT_PARAMS_T *p_event)
             tal_app_server_conn_handle = p_event->ble_event.connect.peer.conn_handle;
 
             tuya_ble_connected_handler();
+
+            /* BLE 连接 → 刷新 LED（蓝闪→绿闪） */
+            app_led_update();
         } break;
 
         case TAL_BLE_EVT_CENTRAL_CONNECT_DISCOVERY: {
@@ -151,6 +194,11 @@ STATIC VOID_T tuya_ble_evt_callback(TAL_BLE_EVT_PARAMS_T *p_event)
             tal_ble_advertising_start(&tal_adv_param);
 #endif
             tal_app_server_conn_handle = 0xFFFF;
+
+            /* BLE 断开 → 刷新 LED（绿闪→蓝闪） */
+            if (app_state_is_powered_on()) {
+                app_led_update();
+            }
         } break;
 
         case TAL_BLE_EVT_ADV_REPORT: {
@@ -315,9 +363,6 @@ OPERATE_RET tuya_init_second(VOID_T)
 OPERATE_RET tuya_init_third(VOID_T)
 {
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
-    app_key_init();
-    // app_led_timer_init();
-
     TUYA_WAKEUP_SOURCE_BASE_CFG_T wakeup_cfg = {
         .source = TUYA_WAKEUP_SOURCE_GPIO,
         .wakeup_para.gpio_param.gpio_num = BOARD_KEY_PIN,
@@ -333,21 +378,45 @@ OPERATE_RET tuya_init_third(VOID_T)
     // tal_i2c_init(TUYA_I2C_NUM_0, &iic_cfg);
 #endif
 
-// 初始化输出高电平引脚
-    TUYA_GPIO_BASE_CFG_T gpio_cfg = {
-        .mode = TUYA_GPIO_PUSH_PULL,
+    /* ---- 模块初始化 ---- */
+
+    /* 1. 状态机（须在其他模块之前初始化） */
+    app_state_init();
+
+    /* 2. 初始化 GPIO 外设引脚 */
+    TUYA_GPIO_BASE_CFG_T gpio_out_high = {
+        .mode   = TUYA_GPIO_PUSH_PULL,
         .direct = TUYA_GPIO_OUTPUT,
-        .level = TUYA_GPIO_LEVEL_HIGH,
+        .level  = TUYA_GPIO_LEVEL_HIGH,
     };
-    tal_gpio_init(LED_R, &gpio_cfg);
-    tal_gpio_init(LED_G, &gpio_cfg);
-    tal_gpio_init(LED_B, &gpio_cfg);
-    tal_gpio_init(AD_BAT_SWITCH, &gpio_cfg);
-    tal_gpio_init(CHARGE_SWITCH, &gpio_cfg);
-// 初始化输出低电平引脚
-    gpio_cfg.level = TUYA_GPIO_LEVEL_LOW;
-    tal_gpio_init(M_INA, &gpio_cfg);
-    tal_gpio_init(M_INB, &gpio_cfg);
+    tal_gpio_init(AD_BAT_SWITCH, &gpio_out_high);
+    tal_gpio_init(CHARGE_SWITCH, &gpio_out_high);
+
+    TUYA_GPIO_BASE_CFG_T gpio_out_low = {
+        .mode   = TUYA_GPIO_PUSH_PULL,
+        .direct = TUYA_GPIO_OUTPUT,
+        .level  = TUYA_GPIO_LEVEL_LOW,
+    };
+    tal_gpio_init(M_INA, &gpio_out_low);
+    tal_gpio_init(M_INB, &gpio_out_low);
+
+    /* 3. 按键（一直运行） */
+    app_key_init();
+
+    /* 4. LED 指示灯 */
+    app_led_init();
+
+    /* 5. 电池监测（ADC+定时器） */
+    app_battery_init();
+
+    /* 6. 充电检测（GPIO轮询） */
+    app_charge_init();
+
+    /* 7. 电机 */
+    app_motor_init();
+
+    /* 8. 振动传感器 */
+    app_vibration_init();
 
     return OPRT_OK;
 }
@@ -367,9 +436,29 @@ OPERATE_RET tuya_init_last(VOID_T)
 
     tal_ble_advertising_start(&tal_adv_param);
 
-    /* DP 测试：创建电池电量定时器，每30秒上报一次 */
-    tal_sw_timer_create(battery_report_timeout_handler, NULL, &s_battery_timer_id);
-    // tal_sw_timer_start(s_battery_timer_id, 30000, TAL_TIMER_CYCLE);
+    /* ---- DP 定时上报定时器 ---- */
+
+    /* 电池电量：每 60s 上报一次缓存值 */
+    tal_sw_timer_create(battery_report_timeout_handler, NULL, &s_battery_report_timer_id);
+    tal_sw_timer_start(s_battery_report_timer_id, 60000, TAL_TIMER_CYCLE);
+
+    /* 设备状态：每 60s 上报一次 */
+    tal_sw_timer_create(work_state_report_timeout_handler, NULL, &s_work_state_report_timer_id);
+    tal_sw_timer_start(s_work_state_report_timer_id, 60000, TAL_TIMER_CYCLE);
+
+    /* ---- 回调注册 ---- */
+
+    /* 振动 → 互动模式触发 */
+    app_vibration_register_cb(app_motor_interactive_trigger);
+
+    /* 设备状态变更 → LED 刷新 */
+    app_state_register_change_cb(led_on_state_change);
+
+    /* 软件电源 → 电机启停 */
+    app_state_register_sw_power_cb(app_motor_start, app_motor_stop);
+
+    /* 临界低电 → 硬件关机保护 */
+    app_battery_register_critical_cb(battery_critical_poweroff);
 
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
     // if (tal_oled_init() == OPRT_OK) {
@@ -396,6 +485,9 @@ OPERATE_RET tuya_main_loop(VOID_T)
 #if !TUYA_BLE_USE_OS
     tuya_ble_main_tasks_exec();
 #endif
+
+    /* 状态机周期性处理（待机超时检测等） */
+    app_state_process();
 
 //    tal_watchdog_refresh();
     
