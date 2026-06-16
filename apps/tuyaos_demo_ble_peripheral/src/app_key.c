@@ -171,6 +171,7 @@ STATIC VOID_T app_key_poll_handler(TIMER_ID timer_id, VOID_T *arg)
                         /* 长按松开 → 恢复出厂 */
                         TAL_PR_INFO("[key] long press release (%dms) -> factory reset",
                                     press_duration);
+                        // tuya_ble_device_unbind();
                         tuya_ble_device_factory_reset();
                         tuya_ble_disconnect_and_reset_timer_start();
                     } else {
