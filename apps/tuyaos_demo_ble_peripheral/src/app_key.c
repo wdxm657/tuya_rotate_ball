@@ -1,8 +1,8 @@
 /**
  * @file app_key.c
- * @brief 按键实现 — 周期轮询检测，短按开关机，长按3s松开恢复出厂
- * @version 1.1
- * @date 2026-06-15
+ * @brief 按键实现 — 自稳定状态机，周期轮询检测，短按开关机，长按3s松开恢复出厂
+ * @version 1.2
+ * @date 2026-06-16
  *
  * @copyright Copyright 2026 Tuya Inc. All Rights Reserved.
  *
@@ -12,13 +12,13 @@
  *   短按（<3s 松开）-> 开关机（切换低功耗模式）
  *   长按（>=3s 松开）-> 蓝牙恢复出厂设置
  *
- * tal_key 状态说明（由 tal_key 库驱动，10ms 周期轮询）：
- *   count_array = {5, 300, 500} -> {50ms, 3000ms, 5000ms}
- *   case 1: 短按检测到（50ms去抖后）
- *   case 2: 长按阈值到达（3000ms）
- *   case 3: 超长超时（5000ms）
- *   case 5: 短按松开
- *   case 6: 长按松开
+ * 算法说明：
+ *   10ms 周期轮询 GPIO 电平，自稳定状态机处理去抖和长短按判定：
+ *   IDLE ──连续5次Low──> DEBOUNCE_PRESS ──完成──> PRESSED
+ *   PRESSED ──连续5次High──> DEBOUNCE_RELEASE ──完成──> IDLE
+ *   在 RELEASE 时根据按下持续时间决定短按/长按动作。
+ *
+ *   不使用 tal_key 库（该库存在稳定性缺陷）。
  */
 
 #include "board.h"
@@ -26,7 +26,7 @@
 #include "tal_log.h"
 #include "tal_sw_timer.h"
 #include "tal_gpio.h"
-#include "tal_key.h"
+#include "tal_system.h"
 
 #include "tuya_ble_api.h"
 #include "tuya_ble_protocol_callback.h"
@@ -39,89 +39,166 @@
  **********************************************************************/
 
 /** 按键引脚 */
-#define APP_KEY_PIN BOARD_KEY_PIN
+#define APP_KEY_PIN                     BOARD_KEY_PIN
 
 /** 按键轮询间隔 ms */
-#define KEY_POLL_MS                 10
+#define KEY_POLL_MS                     10
+
+/** 去抖采样次数（连续 N 次相同电平才确认状态切换） */
+#define KEY_DEBOUNCE_SAMPLES            5
+
+/** 长按判定阈值 ms */
+#define KEY_LONG_PRESS_MS               3000
+
+/***********************************************************************
+ ********************* state machine enum  *****************************
+ **********************************************************************/
+
+/** 按键状态机状态 */
+typedef enum {
+    KEY_STATE_IDLE,                 /**< 空闲，等待按下 */
+    KEY_STATE_DEBOUNCE_PRESS,       /**< 按下去抖中（连续 Low 计数） */
+    KEY_STATE_PRESSED,              /**< 已确认按下，等待松开 */
+    KEY_STATE_DEBOUNCE_RELEASE,     /**< 松开去抖中（连续 High 计数） */
+} key_state_t;
 
 /***********************************************************************
  ********************* static variable *********************************
  **********************************************************************/
 
-/* 按键轮询定时器（10ms 周期，一直运行） */
+/* 轮询定时器 */
 STATIC TIMER_ID s_app_key_timer_id = NULL;
 
-/* 标记：是否已达到长按阈值（用于区分短按松/长按松） */
-STATIC BOOL_T s_long_press_triggered = FALSE;
+/* 按键状态机状态 */
+STATIC key_state_t s_key_state = KEY_STATE_IDLE;
+
+/* 去抖计数器 */
+STATIC UINT8_T s_debounce_cnt = 0;
+
+/* 按下时刻的系统滴答（ms） */
+STATIC UINT32_T s_press_tick_ms = 0;
+
+/** 标记：在长按阈值到达时设为 TRUE，释放时据此判断是否执行长按动作 */
+STATIC BOOL_T s_long_press_eligible = FALSE;
 
 /***********************************************************************
  ********************* static functions *********************************
  **********************************************************************/
 
 /**
- * @brief tal_key 状态回调
- * @param[in] state 按键状态码
- */
-STATIC VOID_T app_key_handler(UINT32_T state)
-{
-    switch (state) {
-        /* 短按检测（50ms 去抖通过） */
-        case 1: {
-            s_long_press_triggered = FALSE;
-        } break;
-
-        /* 长按阈值到达（3000ms） */
-        case 2: {
-            s_long_press_triggered = TRUE;
-            TAL_PR_INFO("[key] long press 3s detected");
-        } break;
-
-        /* 超长超时（5000ms）— 暂不处理 */
-        case 3: {
-        } break;
-
-        /* 短按松开 */
-        case 5: {
-            if (!s_long_press_triggered) {
-                TAL_PR_INFO("[key] short press release -> toggle power");
-                app_state_toggle_power();
-            }
-        } break;
-
-        /* 长按松开 */
-        case 6: {
-            if (s_long_press_triggered) {
-                TAL_PR_INFO("[key] long press release -> factory reset");
-                tuya_ble_device_factory_reset();
-                tuya_ble_disconnect_and_reset_timer_start();
-            }
-        } break;
-
-        default:
-            break;
-    }
-}
-
-/**
- * @brief 设置 tal_key 按键参数
- */
-STATIC tal_key_param_t key_press_param = {
-    .pin         = APP_KEY_PIN,
-    .valid_level = TUYA_KEY_LEVEL_LOW,
-    .count_len   = 3,
-    .count_array = {5, 300, 500},  /* {50ms, 3000ms, 5000ms} */
-    .handler     = app_key_handler,
-};
-
-/**
- * @brief 轮询定时器回调 — 驱动 tal_key 状态机
+ * @brief 轮询定时器回调 — 按键状态机
  *
- * 每 10ms 读取一次按键电平，tal_key 内部处理去抖和长短按判定。
- * 不再依赖 GPIO 中断触发，定时器一直运行。
+ * 每 10ms 读取一次 GPIO 电平，自稳定状态机处理：
+ *
+ * IDLE:               检测到 Low → 进入 DEBOUNCE_PRESS
+ * DEBOUNCE_PRESS:     累计 5 次 Low → 进入 PRESSED，记录按下时间
+ *                      检测到 High → 回退 IDLE（噪声/抖动）
+ * PRESSED:            检测到 High → 进入 DEBOUNCE_RELEASE
+ *                      持续 Low → 检查长按阈值（>=3s 时标记）
+ * DEBOUNCE_RELEASE:   累计 5 次 High → 进入 IDLE，执行短按/长按动作
+ *                      检测到 Low → 回退 PRESSED（抖动/噪声）
  */
 STATIC VOID_T app_key_poll_handler(TIMER_ID timer_id, VOID_T *arg)
 {
-    tal_key_timeout_handler(&key_press_param);
+    TUYA_GPIO_LEVEL_E level = TUYA_GPIO_LEVEL_HIGH;
+    UINT32_T now_ms;
+    UINT32_T press_duration;
+
+    /* 读取 GPIO 电平 */
+    if (tal_gpio_read(APP_KEY_PIN, &level) != OPRT_OK) {
+        return;
+    }
+
+    switch (s_key_state) {
+
+        /* ======================== IDLE ======================== */
+        case KEY_STATE_IDLE: {
+            if (level == TUYA_GPIO_LEVEL_LOW) {
+                /* 检测到按下，进入去抖 */
+                s_key_state = KEY_STATE_DEBOUNCE_PRESS;
+                s_debounce_cnt = 1;
+            }
+        } break;
+
+        /* ======================== DEBOUNCE_PRESS ======================== */
+        case KEY_STATE_DEBOUNCE_PRESS: {
+            if (level == TUYA_GPIO_LEVEL_LOW) {
+                s_debounce_cnt++;
+                if (s_debounce_cnt >= KEY_DEBOUNCE_SAMPLES) {
+                    /* 去抖通过，确认已按下 */
+                    s_key_state = KEY_STATE_PRESSED;
+                    s_press_tick_ms = tal_system_get_millisecond();
+                    s_long_press_eligible = FALSE;
+                    s_debounce_cnt = 0;
+
+                    TAL_PR_DEBUG("[key] press confirmed");
+                }
+            } else {
+                /* 去抖过程中电平恢复 → 视为噪声，回退 IDLE */
+                s_key_state = KEY_STATE_IDLE;
+                s_debounce_cnt = 0;
+            }
+        } break;
+
+        /* ======================== PRESSED ======================== */
+        case KEY_STATE_PRESSED: {
+            if (level == TUYA_GPIO_LEVEL_HIGH) {
+                /* 检测到松开，进入释放去抖 */
+                s_key_state = KEY_STATE_DEBOUNCE_RELEASE;
+                s_debounce_cnt = 1;
+            } else {
+                /* 持续按下：检查长按阈值 */
+                now_ms = tal_system_get_millisecond();
+                press_duration = now_ms - s_press_tick_ms;
+
+                if (!s_long_press_eligible && press_duration >= KEY_LONG_PRESS_MS) {
+                    s_long_press_eligible = TRUE;
+                    TAL_PR_INFO("[key] long press 3s threshold reached");
+                }
+            }
+        } break;
+
+        /* ======================== DEBOUNCE_RELEASE ======================== */
+        case KEY_STATE_DEBOUNCE_RELEASE: {
+            if (level == TUYA_GPIO_LEVEL_HIGH) {
+                s_debounce_cnt++;
+                if (s_debounce_cnt >= KEY_DEBOUNCE_SAMPLES) {
+                    /* 去抖通过，确认已释放 → 判定长短按 */
+                    now_ms = tal_system_get_millisecond();
+                    press_duration = now_ms - s_press_tick_ms;
+
+                    if (s_long_press_eligible || press_duration >= KEY_LONG_PRESS_MS) {
+                        /* 长按松开 → 恢复出厂 */
+                        TAL_PR_INFO("[key] long press release (%dms) -> factory reset",
+                                    press_duration);
+                        tuya_ble_device_factory_reset();
+                        tuya_ble_disconnect_and_reset_timer_start();
+                    } else {
+                        /* 短按松开 → 开关机 */
+                        TAL_PR_INFO("[key] short press release (%dms) -> toggle power",
+                                    press_duration);
+                        app_state_toggle_power();
+                    }
+
+                    /* 回退 IDLE */
+                    s_key_state = KEY_STATE_IDLE;
+                    s_debounce_cnt = 0;
+                    s_long_press_eligible = FALSE;
+                }
+            } else {
+                /* 释放去抖中电平又变回 Low → 视为抖动，回退 PRESSED */
+                s_key_state = KEY_STATE_PRESSED;
+                s_debounce_cnt = 0;
+            }
+        } break;
+
+        default: {
+            /* 异常状态保护 */
+            s_key_state = KEY_STATE_IDLE;
+            s_debounce_cnt = 0;
+            s_long_press_eligible = FALSE;
+        } break;
+    }
 }
 
 /***********************************************************************
@@ -139,14 +216,16 @@ VOID_T app_key_init(VOID_T)
     /* 初始化 GPIO（不进中断，纯输入轮询） */
     tal_gpio_init(APP_KEY_PIN, &gpio_cfg);
 
-    /* 初始化 tal_key 库 */
-    tal_key_init(&key_press_param);
-
     /* 创建并启动 10ms 周期轮询定时器 */
     tal_sw_timer_create(app_key_poll_handler, NULL, &s_app_key_timer_id);
     tal_sw_timer_start(s_app_key_timer_id, KEY_POLL_MS, TAL_TIMER_CYCLE);
 
-    s_long_press_triggered = FALSE;
+    /* 状态机初始值 */
+    s_key_state          = KEY_STATE_IDLE;
+    s_debounce_cnt       = 0;
+    s_press_tick_ms      = 0;
+    s_long_press_eligible = FALSE;
 
-    TAL_PR_INFO("[key] initialized (poll %dms), pin %d", KEY_POLL_MS, APP_KEY_PIN);
+    TAL_PR_INFO("[key] custom driver initialized (poll %dms), pin %d",
+                KEY_POLL_MS, APP_KEY_PIN);
 }
