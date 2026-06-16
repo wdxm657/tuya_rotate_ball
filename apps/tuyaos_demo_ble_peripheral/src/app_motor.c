@@ -1,33 +1,37 @@
 /**
  * @file app_motor.c
- * @brief 电机控制实现 — 游戏模式时序序列状态机
+ * @brief 电机控制实现 — 游戏模式时序序列状态机 (PWM 调速)
  * @version 1.0
  * @date 2026-06-15
  *
  * @copyright Copyright 2026 Tuya Inc. All Rights Reserved.
  *
- * 控制逻辑：
- *   M_INA high, M_INB low  → 正转
- *   M_INA low,  M_INB high → 反转
- *   M_INA low,  M_INB low  → 停止
+ * 控制逻辑（PWM H 桥）：
+ *   M_INA=PWM(duty), M_INB=0       → 正转（速度由 duty 决定）
+ *   M_INA=0,          M_INB=PWM(duty) → 反转
+ *   M_INA=0,          M_INB=0       → 停止
  *
- * 快/慢模式：两者时序相同，差异在旋转速度（快模式高速，慢模式低速）。
+ * 快/慢模式占空比：
+ *   快速 → 100% (MOTOR_PWM_DUTY_100)
+ *   慢速 → 50%  (MOTOR_PWM_DUTY_50)
+ *
+ * 快/慢模式：两者时序相同，差异在旋转速度（快速 100%，慢速 50%）。
  *   序列（12步循环）：
  *   正转7.2S → 停止5.2S → 反转5.2S → 停止3S → 正转3S → 停止7.2S
  *   → 反转7.2S → 停止3S → 正转3S → 停止5.2S → 反转7.2S → 停止7.2S
  *
- * 互动模式：振动激活一次完整序列（6步后停止）：
+ * 互动模式：振动激活一次完整序列（6步后停止），占空比同快速（100%）：
  *   正转7.2S → 停止5.2S → 反转5.2S → 停止3S → 正转3S → 停止5S
  *   旋转期间振动不激活，结束后振动可再次激活。
  */
 
 #include "tal_log.h"
 #include "tal_sw_timer.h"
-#include "tal_gpio.h"
+#include "tal_pwm.h"
 #include "board.h"
 
 #include "app_motor.h"
-
+#include "app_state.h"
 /***********************************************************************
  ********************* constant ( macro and enum ) *********************
  **********************************************************************/
@@ -67,7 +71,7 @@ STATIC BOOL_T       s_rotation_locked = FALSE;
 /**
  * 快/慢模式时序表（12步）
  * 注意：快和慢的时序相同，区别在于电机旋转速度。
- * 此处以相同时序实现，如需区分速度可使用 PWM 控制占空比。
+ * 快速使用 100% 占空比，慢速使用 50% 占空比。
  */
 STATIC const motor_step_t g_motor_seq_fast[MOTOR_SEQ_FAST_STEPS] = {
     {MOTOR_DIR_FORWARD, 7200},
@@ -100,6 +104,7 @@ STATIC const motor_step_t g_motor_seq_interactive[MOTOR_SEQ_INTERACTIVE_STEPS] =
  ********************* static function prototypes **********************
  **********************************************************************/
 
+STATIC UINT32_T app_motor_get_duty(VOID_T);
 STATIC VOID_T app_motor_set_direction(UINT8_T direction);
 STATIC VOID_T app_motor_seq_timeout_handler(TIMER_ID timer_id, VOID_T *arg);
 STATIC VOID_T app_motor_seq_start(VOID_T);
@@ -110,31 +115,55 @@ STATIC VOID_T app_motor_seq_stop(VOID_T);
  **********************************************************************/
 
 /**
- * @brief 设置电机旋转方向（GPIO 电平控制 H 桥）
+ * @brief 根据当前游戏模式获取 PWM 占空比
+ * @return 占空比微百分比 (0~1000000)，供 tal_pwm_duty_set 使用
+ */
+STATIC UINT32_T app_motor_get_duty(VOID_T)
+{
+    switch (s_game_mode) {
+        case GAME_MODE_FAST:
+            return MOTOR_PWM_DUTY_100;
+        case GAME_MODE_SLOW:
+            return MOTOR_PWM_DUTY_50;
+        case GAME_MODE_INTERACTIVE:
+            /* 互动模式也用快速 100% 占空比 */
+            return MOTOR_PWM_DUTY_100;
+        default:
+            return MOTOR_PWM_DUTY_0;
+    }
+}
+
+/**
+ * @brief 设置电机旋转方向（PWM 占空比控制 H 桥）
  * @param[in] direction MOTOR_DIR_STOP/FORWARD/REVERSE
+ *
+ * 根据当前游戏模式选择 PWM 占空比：
+ *   快速 → 100%，慢速 → 50%
  */
 STATIC VOID_T app_motor_set_direction(UINT8_T direction)
 {
+    UINT32_T duty = app_motor_get_duty();
+
     switch (direction) {
         case MOTOR_DIR_FORWARD:
-            /* M_INA=H, M_INB=L → 正转 */
-            tal_gpio_write(M_INA, TUYA_GPIO_LEVEL_HIGH);
-            tal_gpio_write(M_INB, TUYA_GPIO_LEVEL_LOW);
-            TAL_PR_DEBUG("[motor] -> FORWARD");
+            /* M_INA=PWM(duty), M_INB=0 → 正转 */
+            tal_pwm_duty_set(MOTOR_PWM_CH_INA, duty);
+            tal_pwm_duty_set(MOTOR_PWM_CH_INB, MOTOR_PWM_DUTY_0);
+            TAL_PR_DEBUG("[motor] -> FORWARD, duty=%lu", duty);
             break;
 
         case MOTOR_DIR_REVERSE:
-            /* M_INA=L, M_INB=H → 反转 */
-            tal_gpio_write(M_INA, TUYA_GPIO_LEVEL_LOW);
-            tal_gpio_write(M_INB, TUYA_GPIO_LEVEL_HIGH);
-            TAL_PR_DEBUG("[motor] -> REVERSE");
+            /* M_INA=0, M_INB=PWM(duty) → 反转 */
+            tal_pwm_duty_set(MOTOR_PWM_CH_INA, MOTOR_PWM_DUTY_0);
+            tal_pwm_duty_set(MOTOR_PWM_CH_INB, duty);
+            TAL_PR_DEBUG("[motor] -> REVERSE, duty=%lu", duty);
             break;
 
         case MOTOR_DIR_STOP:
         default:
-            /* M_INA=L, M_INB=L → 停止 */
-            tal_gpio_write(M_INA, TUYA_GPIO_LEVEL_LOW);
-            tal_gpio_write(M_INB, TUYA_GPIO_LEVEL_LOW);
+            /* M_INA=0, M_INB=0 → 停止 */
+            tal_pwm_duty_set(MOTOR_PWM_CH_INA, MOTOR_PWM_DUTY_0);
+            tal_pwm_duty_set(MOTOR_PWM_CH_INB, MOTOR_PWM_DUTY_0);
             TAL_PR_DEBUG("[motor] -> STOP");
             break;
     }
@@ -144,9 +173,10 @@ STATIC VOID_T app_motor_set_direction(UINT8_T direction)
  * @brief 时序定时器回调 — 执行下一步
  *
  * 每步执行：
- *   1. 若已停止（非首次），先自增索引
- *   2. 设置方向
- *   3. 重启定时器为本步持续时间
+ *   1. 获取当前步的方向和持续时间
+ *   2. 设置方向（自动选择对应模式的 PWM 占空比）
+ *   3. 前进到下一步
+ *   4. 重启定时器为本步持续时间
  */
 STATIC VOID_T app_motor_seq_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
 {
@@ -163,10 +193,10 @@ STATIC VOID_T app_motor_seq_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
 
     /* 获取当前步 */
     if (s_game_mode == GAME_MODE_INTERACTIVE) {
-        direction  = g_motor_seq_interactive[s_seq_index].direction;
+        direction   = g_motor_seq_interactive[s_seq_index].direction;
         duration_ms = g_motor_seq_interactive[s_seq_index].duration_ms;
     } else {
-        direction  = g_motor_seq_fast[s_seq_index].direction;
+        direction   = g_motor_seq_fast[s_seq_index].direction;
         duration_ms = g_motor_seq_fast[s_seq_index].duration_ms;
     }
 
@@ -175,7 +205,7 @@ STATIC VOID_T app_motor_seq_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
         s_rotation_locked = (direction != MOTOR_DIR_STOP);
     }
 
-    /* 设置方向 */
+    /* 设置方向（PWM 占空比由当前游戏模式决定） */
     app_motor_set_direction(direction);
 
     /* 前进到下一步 */
@@ -194,9 +224,7 @@ STATIC VOID_T app_motor_seq_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
         s_seq_index = 0;
     }
 
-    /* 如果还有下一步，获取其持续时间重启定时器 */
-    /* 注意：休息间隔是上一步 stop 的持续时间，所以这里用本步的 duration */
-    /* 实际上我们需要的是"执行当前步并等待其完成"，所以用当前步的 duration */
+    /* 重启定时器为本步持续时间 */
     tal_sw_timer_start(s_motor_timer_id, duration_ms, TAL_TIMER_ONCE);
 }
 
@@ -245,7 +273,7 @@ STATIC VOID_T app_motor_seq_stop(VOID_T)
         tal_sw_timer_stop(s_motor_timer_id);
     }
 
-    /* 电机停止 */
+    /* 电机停止（PWM 占空比置 0） */
     app_motor_set_direction(MOTOR_DIR_STOP);
 
     /* 清除状态 */
@@ -262,6 +290,27 @@ STATIC VOID_T app_motor_seq_stop(VOID_T)
 
 VOID_T app_motor_init(VOID_T)
 {
+    OPERATE_RET ret;
+
+    /* 初始化 PWM 通道：M_INA (PB4 → PWM4) */
+    TUYA_PWM_BASE_CFG_T pwm_cfg = {
+        .polarity   = TUYA_PWM_POSITIVE,
+        .count_mode = TUYA_PWM_CNT_UP,
+        .duty       = 0,              /* 初始占空比 0%（电机停止） */
+        .cycle      = 100,            /* 周期基数 100（0~100% 映射） */
+        .frequency  = MOTOR_PWM_FREQ_HZ,
+    };
+
+    ret = tal_pwm_init(MOTOR_PWM_CH_INA, &pwm_cfg);
+    if (ret != OPRT_OK) {
+        TAL_PR_ERR("[motor] PWM init failed for ch INA, ret=%d", ret);
+    }
+
+    ret = tal_pwm_init(MOTOR_PWM_CH_INB, &pwm_cfg);
+    if (ret != OPRT_OK) {
+        TAL_PR_ERR("[motor] PWM init failed for ch INB, ret=%d", ret);
+    }
+
     /* 创建时序定时器（不自动启动） */
     tal_sw_timer_create(app_motor_seq_timeout_handler, NULL, &s_motor_timer_id);
 
@@ -271,7 +320,7 @@ VOID_T app_motor_init(VOID_T)
     s_interactive_active = FALSE;
     s_rotation_locked    = FALSE;
 
-    TAL_PR_INFO("[motor] initialized");
+    TAL_PR_INFO("[motor] initialized (PWM mode, freq=%dHz)", MOTOR_PWM_FREQ_HZ);
 }
 
 VOID_T app_motor_set_mode(game_mode_t mode)
@@ -287,6 +336,11 @@ VOID_T app_motor_set_mode(game_mode_t mode)
     }
 
     s_game_mode = mode;
+
+    // 模式设置完后，如果当前为软件开机状态，则自动启动新模式的序列
+    if (app_state_is_software_powered_on()) {
+        app_motor_seq_start();
+    }
     TAL_PR_INFO("[motor] mode set to %d", mode);
 }
 

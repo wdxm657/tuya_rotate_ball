@@ -12,6 +12,7 @@
 #define __APP_MOTOR_H__
 
 #include "tuya_cloud_types.h"
+#include "tal_pwm.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,6 +26,21 @@ extern "C" {
 #define MOTOR_DIR_STOP      0   /**< 停止 */
 #define MOTOR_DIR_FORWARD   1   /**< 正转 */
 #define MOTOR_DIR_REVERSE   2   /**< 反转 */
+
+/** PWM 通道映射：M_INA=PB4→PWM4, M_INB=PB5→PWM5 */
+#define MOTOR_PWM_CH_INA        TUYA_PWM_NUM_4
+#define MOTOR_PWM_CH_INB        TUYA_PWM_NUM_5
+
+/** PWM 频率 (1kHz，适用于直流电机 H 桥) */
+#define MOTOR_PWM_FREQ_HZ       1000
+
+/**
+ * PWM 占空比 (tal_pwm_duty_set 使用 0~1000000 微百分比)
+ * 100% = 1000000,  50% = 500000
+ */
+#define MOTOR_PWM_DUTY_100      1000000U
+#define MOTOR_PWM_DUTY_50       500000U
+#define MOTOR_PWM_DUTY_0        0U
 
 /** 游戏模式枚举 — 与 DP_ID_MODE 枚举值一致 */
 typedef enum {
