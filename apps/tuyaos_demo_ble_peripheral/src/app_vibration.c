@@ -27,7 +27,7 @@
 #define VIBRATION_POLL_MS           10
 
 /** 去抖计数器阈值（连续读到 Low 的次数） */
-#define VIBRATION_DEBOUNCE_CNT      30
+#define VIBRATION_DEBOUNCE_CNT      3
 
 /***********************************************************************
  ********************* static variable *********************************
@@ -72,8 +72,8 @@ STATIC VOID_T app_vibration_poll_handler(TIMER_ID timer_id, VOID_T *arg)
         return;
     }
 
-    if (level == TUYA_GPIO_LEVEL_LOW) {
-        /* 检测到 Low（振动激活） */
+    if (level == TUYA_GPIO_LEVEL_HIGH) {
+        /* 检测到 High（振动激活） */
         if (!s_triggered) {
             s_debounce_cnt++;
             if (s_debounce_cnt >= VIBRATION_DEBOUNCE_CNT) {
@@ -81,7 +81,6 @@ STATIC VOID_T app_vibration_poll_handler(TIMER_ID timer_id, VOID_T *arg)
                 s_triggered = TRUE;
                 s_debounce_cnt = 0;
                 s_last_trigger_tick = tal_system_get_millisecond();
-
                 TAL_PR_DEBUG("[vibration] detected");
 
                 if (s_vibration_cb != NULL) {
@@ -90,7 +89,7 @@ STATIC VOID_T app_vibration_poll_handler(TIMER_ID timer_id, VOID_T *arg)
             }
         }
     } else {
-        /* 高电平（未振动），复位去抖计数 */
+        /* 低电平（未振动），复位去抖计数 */
         s_debounce_cnt = 0;
         /* 电平恢复，允许下次触发 */
         s_triggered = FALSE;

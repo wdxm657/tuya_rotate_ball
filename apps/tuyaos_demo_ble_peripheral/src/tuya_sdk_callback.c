@@ -66,7 +66,7 @@
 UINT16_T tal_app_server_conn_handle = 0xFFFF;
 
 /* 电池电量DP定时上报（向APP周期性通知） */
-STATIC TIMER_ID s_battery_report_timer_id = NULL;
+STATIC TIMER_ID s_dp_report_timer_id = NULL;
 
 /* 设备状态DP定时上报（向APP周期性通知 work_state） */
 STATIC TIMER_ID s_work_state_report_timer_id = NULL;
@@ -115,10 +115,6 @@ STATIC TUYA_BLE_BULKDATA_CB_T tuya_ble_bulkdata_cb = {0};
  */
 STATIC VOID_T led_on_state_change(dev_state_t old_state, dev_state_t new_state)
 {
-    UINT8_T state = app_state_get_dp_enum();
-    app_dp_report(DP_ID_WORK_STATE, &state, DT_ENUM_LEN);
-    TAL_PR_DEBUG("[dp] work_state report: %d", state);
-
     app_led_update();
 }
 
@@ -135,18 +131,65 @@ STATIC VOID_T battery_critical_poweroff(VOID_T)
  ********************* DP 定时上报 **************************************
  **********************************************************************/
 
-/* 电池电量DP定时上报：读取缓存值，上报给APP */
-STATIC VOID_T battery_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
+/* DP定时上报：读取缓存值，仅上报有变更的DP */
+STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
 {
+    if(tal_app_server_conn_handle == 0XFFFF){
+        return;
+    }
+
+    static UINT8_T s_last_battery = 0xFF;
+    static UINT8_T s_last_switch  = 0xFF;
+    static UINT8_T s_last_mode    = 0xFF;
+    static UINT8_T s_last_work_state = 0xFF;
+
     UINT8_T buf[DT_VALUE_LEN] = {0};
-    UINT8_T percent = app_battery_get_percent();
 
-    /* DT_VALUE: 4字节小端 int，第4字节为有效值 */
-    buf[3] = percent;
+    /* 电池电量 */
+    {
+        UINT8_T percent = app_battery_get_percent();
+        if (percent != s_last_battery) {
+            s_last_battery = percent;
+            /* DT_VALUE: 4字节小端 int，第4字节为有效值 */
+            buf[3] = percent;
+            app_dp_report(DP_ID_BATTERY, buf, DT_VALUE_LEN);
+            TAL_PR_DEBUG("[dp] battery report: %d%%", percent);
+        }
+    }
 
-    app_dp_report(DP_ID_BATTERY, buf, DT_VALUE_LEN);
+    /* 开关状态 */
+    {
+        UINT8_T power_on = app_state_is_powered_on() ? 1 : 0;
+        if (power_on != s_last_switch) {
+            s_last_switch = power_on;
+            memset(buf, 0, DT_VALUE_LEN);
+            buf[0] = power_on;
+            app_dp_report(DP_ID_SWITCH, buf, DT_BOOL_LEN);
+            TAL_PR_DEBUG("[dp] switch report: %d", power_on);
+        }
+    }
 
-    TAL_PR_DEBUG("[dp] battery report: %d%%", percent);
+    /* 工作模式 */
+    {
+        UINT8_T mode = (UINT8_T)app_motor_get_mode();
+        if (mode != s_last_mode) {
+            s_last_mode = mode;
+            memset(buf, 0, DT_VALUE_LEN);
+            buf[0] = mode;
+            app_dp_report(DP_ID_MODE, buf, DT_ENUM_LEN);
+            TAL_PR_DEBUG("[dp] mode report: %d", mode);
+        }
+    }
+
+    /* 工作状态 */
+    {
+        UINT8_T state = app_state_get_dp_enum();
+        if (state != s_last_work_state) {
+            s_last_work_state = state;
+            app_dp_report(DP_ID_WORK_STATE, &state, DT_ENUM_LEN);
+            TAL_PR_DEBUG("[dp] work_state report: %d", state);
+        }
+    }
 }
 
 STATIC VOID_T tuya_ble_evt_callback(TAL_BLE_EVT_PARAMS_T *p_event)
@@ -427,8 +470,8 @@ OPERATE_RET tuya_init_last(VOID_T)
     /* ---- DP 定时上报定时器 ---- */
 
     /* 电池电量：每 60s 上报一次缓存值 */
-    tal_sw_timer_create(battery_report_timeout_handler, NULL, &s_battery_report_timer_id);
-    tal_sw_timer_start(s_battery_report_timer_id, 60000, TAL_TIMER_CYCLE);
+    tal_sw_timer_create(dp_report_timeout_handler, NULL, &s_dp_report_timer_id);
+    tal_sw_timer_start(s_dp_report_timer_id, 1000, TAL_TIMER_CYCLE);
 
     /* ---- 回调注册 ---- */
 
