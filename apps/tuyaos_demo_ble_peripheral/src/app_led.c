@@ -36,7 +36,7 @@
  **********************************************************************/
 
 /** 闪烁周期 ms（半周期翻转一次） */
-#define LED_BLINK_PERIOD_MS         250
+#define LED_BLINK_PERIOD_MS 250
 
 /***********************************************************************
  ********************* static variable *********************************
@@ -75,15 +75,18 @@ STATIC VOID_T app_led_set_pins(TUYA_GPIO_LEVEL_E r, TUYA_GPIO_LEVEL_E g, TUYA_GP
 STATIC VOID_T app_led_set_pins(TUYA_GPIO_LEVEL_E r, TUYA_GPIO_LEVEL_E g, TUYA_GPIO_LEVEL_E b)
 {
     /* 仅在电平变化时写入，减少 GPIO 调用 */
-    if (r != s_r_level) {
+    if (r != s_r_level)
+    {
         tal_gpio_write(LED_R, r);
         s_r_level = r;
     }
-    if (g != s_g_level) {
+    if (g != s_g_level)
+    {
         tal_gpio_write(LED_G, g);
         s_g_level = g;
     }
-    if (b != s_b_level) {
+    if (b != s_b_level)
+    {
         tal_gpio_write(LED_B, b);
         s_b_level = b;
     }
@@ -99,21 +102,25 @@ STATIC VOID_T app_led_blink_handler(TIMER_ID timer_id, VOID_T *arg)
     s_led_on = !s_led_on;
 
     /* 共阳：低电平点亮，高电平熄灭 */
-    if (s_led_on) {
-        switch (s_led_mode) {
-            case LED_MODE_BLUE_BLINK:
-                app_led_set_pins(TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_LOW);
-                break;
-            case LED_MODE_GREEN_BLINK:
-                app_led_set_pins(TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_LOW, TUYA_GPIO_LEVEL_HIGH);
-                break;
-            case LED_MODE_RED_BLINK:
-                app_led_set_pins(TUYA_GPIO_LEVEL_LOW, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH);
-                break;
-            default:
-                break;
+    if (s_led_on)
+    {
+        switch (s_led_mode)
+        {
+        case LED_MODE_BLUE_BLINK:
+            app_led_set_pins(TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_LOW);
+            break;
+        case LED_MODE_GREEN_BLINK:
+            app_led_set_pins(TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_LOW, TUYA_GPIO_LEVEL_HIGH);
+            break;
+        case LED_MODE_RED_BLINK:
+            app_led_set_pins(TUYA_GPIO_LEVEL_LOW, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH);
+            break;
+        default:
+            break;
         }
-    } else {
+    }
+    else
+    {
         /* 熄灭 */
         app_led_set_pins(TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH);
     }
@@ -125,24 +132,36 @@ STATIC VOID_T app_led_blink_handler(TIMER_ID timer_id, VOID_T *arg)
 
 VOID_T app_led_init(VOID_T)
 {
+    // 初始化所有LED IO
+    TUYA_GPIO_BASE_CFG_T gpio_out_high = {
+        .mode   = TUYA_GPIO_PUSH_PULL,
+        .direct = TUYA_GPIO_OUTPUT,
+        .level  = TUYA_GPIO_LEVEL_HIGH,
+    };
+
+    tal_gpio_init(LED_R, &gpio_out_high);
+    tal_gpio_init(LED_G, &gpio_out_high);
+    tal_gpio_init(LED_B, &gpio_out_high);
     /* 创建闪烁定时器 */
     tal_sw_timer_create(app_led_blink_handler, NULL, &s_led_timer_id);
 
     /* 初始状态：所有 LED 熄灭 */
     app_led_set_pins(TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH);
     s_led_mode = LED_MODE_OFF;
-    s_led_on   = FALSE;
+    s_led_on = FALSE;
 
     TAL_PR_INFO("[led] initialized");
 }
 
 VOID_T app_led_set_mode(led_mode_t mode)
 {
-    if (mode == s_led_mode) {
-        return;  /* 模式未变化，不做处理 */
+    if (mode == s_led_mode)
+    {
+        return; /* 模式未变化，不做处理 */
     }
 
-    if (mode > LED_MODE_RED_SOLID) {
+    if (mode > LED_MODE_RED_SOLID)
+    {
         TAL_PR_ERR("[led] invalid mode: %d", mode);
         return;
     }
@@ -151,46 +170,48 @@ VOID_T app_led_set_mode(led_mode_t mode)
     s_led_mode = mode;
 
     /* 停止之前的定时器 */
-    if (s_led_timer_id != NULL) {
+    if (s_led_timer_id != NULL)
+    {
         tal_sw_timer_stop(s_led_timer_id);
     }
 
     s_led_on = FALSE;
 
-    switch (mode) {
-        case LED_MODE_OFF:
-            /* 全部熄灭 */
-            app_led_set_pins(TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH);
-            break;
+    switch (mode)
+    {
+    case LED_MODE_OFF:
+        /* 全部熄灭 */
+        app_led_set_pins(TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH);
+        break;
 
-        case LED_MODE_RED_SOLID:
-            /* 红灯常亮 */
-            app_led_set_pins(TUYA_GPIO_LEVEL_LOW, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH);
-            break;
+    case LED_MODE_RED_SOLID:
+        /* 红灯常亮 */
+        app_led_set_pins(TUYA_GPIO_LEVEL_LOW, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH);
+        break;
 
-        case LED_MODE_BLUE_BLINK:
-            /* 蓝灯闪烁：启动 250ms 周期定时器 */
-            s_led_on = TRUE;
-            app_led_set_pins(TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_LOW);
-            tal_sw_timer_start(s_led_timer_id, LED_BLINK_PERIOD_MS, TAL_TIMER_CYCLE);
-            break;
+    case LED_MODE_BLUE_BLINK:
+        /* 蓝灯闪烁：启动 250ms 周期定时器 */
+        s_led_on = TRUE;
+        app_led_set_pins(TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_LOW);
+        tal_sw_timer_start(s_led_timer_id, LED_BLINK_PERIOD_MS, TAL_TIMER_CYCLE);
+        break;
 
-        case LED_MODE_GREEN_BLINK:
-            /* 绿灯闪烁：启动 250ms 周期定时器 */
-            s_led_on = TRUE;
-            app_led_set_pins(TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_LOW, TUYA_GPIO_LEVEL_HIGH);
-            tal_sw_timer_start(s_led_timer_id, LED_BLINK_PERIOD_MS, TAL_TIMER_CYCLE);
-            break;
+    case LED_MODE_GREEN_BLINK:
+        /* 绿灯闪烁：启动 250ms 周期定时器 */
+        s_led_on = TRUE;
+        app_led_set_pins(TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_LOW, TUYA_GPIO_LEVEL_HIGH);
+        tal_sw_timer_start(s_led_timer_id, LED_BLINK_PERIOD_MS, TAL_TIMER_CYCLE);
+        break;
 
-        case LED_MODE_RED_BLINK:
-            /* 红灯闪烁：启动 250ms 周期定时器 */
-            s_led_on = TRUE;
-            app_led_set_pins(TUYA_GPIO_LEVEL_LOW, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH);
-            tal_sw_timer_start(s_led_timer_id, LED_BLINK_PERIOD_MS, TAL_TIMER_CYCLE);
-            break;
+    case LED_MODE_RED_BLINK:
+        /* 红灯闪烁：启动 250ms 周期定时器 */
+        s_led_on = TRUE;
+        app_led_set_pins(TUYA_GPIO_LEVEL_LOW, TUYA_GPIO_LEVEL_HIGH, TUYA_GPIO_LEVEL_HIGH);
+        tal_sw_timer_start(s_led_timer_id, LED_BLINK_PERIOD_MS, TAL_TIMER_CYCLE);
+        break;
 
-        default:
-            break;
+    default:
+        break;
     }
 }
 
@@ -200,30 +221,44 @@ VOID_T app_led_set_mode(led_mode_t mode)
  * 优先级（高→低）：
  *   充电中 → 红灯常亮
  *   低电量（工作中）→ 红灯闪烁
+ *   待机/关机 → 熄灭
  *   蓝牙未连接（工作中）→ 蓝灯闪烁
  *   工作正常 → 绿灯闪烁
- *   待机/满电/关机 → 熄灭
  */
 VOID_T app_led_update(VOID_T)
 {
     led_mode_t new_mode;
 
-    if (!app_state_is_powered_on()) {
-        new_mode = LED_MODE_OFF;
-    } else if (app_state_is_charging()) {
+    if (app_state_is_charging())
+    {
         new_mode = LED_MODE_RED_SOLID;
-    } else if (app_state_get() == DEV_STATE_CHARGE_DONE) {
+    }
+    /* 工作状态 */
+    else if (app_battery_is_low())
+    {
+        new_mode = LED_MODE_RED_BLINK;
+    }
+    else if (!app_state_is_powered_on())
+    {
         new_mode = LED_MODE_OFF;
-    } else if (app_state_get() == DEV_STATE_STANDBY) {
+    }
+    // else if (app_state_get() == DEV_STATE_CHARGE_DONE)
+    // {
+    //     new_mode = LED_MODE_OFF;
+    // }
+    else if (app_state_get() == DEV_STATE_STANDBY)
+    {
         new_mode = LED_MODE_OFF;
-    } else {
-        /* 工作状态 */
-        if (app_battery_is_low()) {
-            new_mode = LED_MODE_RED_BLINK;
-        } else if (tuya_app_get_conn_handle() == 0xFFFF) {
+    }
+    else
+    {
+        if (tuya_app_get_conn_handle() == 0xFFFF)
+        {
             /* 蓝牙未连接 → 蓝灯闪烁 */
             new_mode = LED_MODE_BLUE_BLINK;
-        } else {
+        }
+        else
+        {
             new_mode = LED_MODE_GREEN_BLINK;
         }
     }

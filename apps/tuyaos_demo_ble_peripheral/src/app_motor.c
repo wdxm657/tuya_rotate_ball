@@ -337,8 +337,9 @@ VOID_T app_motor_set_mode(game_mode_t mode)
 
     s_game_mode = mode;
 
-    // 模式设置完后，如果当前为软件开机状态，则自动启动新模式的序列
-    if (app_state_is_software_powered_on()) {
+    // 模式设置完后，如果当前为开机状态，则自动启动新模式的序列
+    // 交互模式由检测到震动触发开关
+    if (app_state_is_powered_on() && s_game_mode != GAME_MODE_INTERACTIVE) {
         app_motor_seq_start();
     }
     TAL_PR_INFO("[motor] mode set to %d", mode);

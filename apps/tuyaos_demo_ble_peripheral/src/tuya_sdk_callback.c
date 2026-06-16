@@ -438,8 +438,8 @@ OPERATE_RET tuya_init_last(VOID_T)
     /* 设备状态变更 → LED 刷新 */
     app_state_register_change_cb(led_on_state_change);
 
-    /* 软件电源 → 电机启停 */
-    app_state_register_sw_power_cb(app_motor_start, app_motor_stop);
+    /* 电源状态 → 电机启停（统一开关机，与物理按键/蓝牙 DP_SWITCH 一致） */
+    app_state_register_power_cb(app_motor_start, app_motor_stop);
 
     /* 临界低电 → 硬件关机保护 */
     // app_battery_register_critical_cb(battery_critical_poweroff);

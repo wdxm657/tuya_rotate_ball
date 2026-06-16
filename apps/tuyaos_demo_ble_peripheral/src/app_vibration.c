@@ -27,7 +27,7 @@
 #define VIBRATION_POLL_MS           10
 
 /** 去抖计数器阈值（连续读到 Low 的次数） */
-#define VIBRATION_DEBOUNCE_CNT      3
+#define VIBRATION_DEBOUNCE_CNT      30
 
 /***********************************************************************
  ********************* static variable *********************************

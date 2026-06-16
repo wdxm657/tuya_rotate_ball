@@ -56,10 +56,10 @@ OPERATE_RET app_dp_parser(UINT8_T* buf, UINT32_T size)
 
     switch (g_cmd.dp_id) {
         case DP_ID_SWITCH: {
-            /* 蓝牙开关控制软件电源 */
+            /* 蓝牙开关控制电源（与物理按键短按相同） */
             BOOL_T sw_on = (g_cmd.dp_data[0] != 0);
             TAL_PR_INFO("DP_ID_SWITCH: %s", sw_on ? "ON" : "OFF");
-            app_state_set_software_power(sw_on);
+            app_state_set_power(sw_on);
         } break;
 
         case DP_ID_MODE: {
