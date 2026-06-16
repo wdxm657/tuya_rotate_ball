@@ -201,6 +201,7 @@ VOID_T tuya_ble_protocol_init(VOID_T)
     extern tuya_ble_parameters_settings_t tuya_ble_current_para;
     TAL_PR_HEXDUMP_INFO("auth key", tuya_ble_current_para.auth_settings.auth_key, AUTH_KEY_LEN);
     TAL_PR_HEXDUMP_INFO("device id", tuya_ble_current_para.auth_settings.device_id, DEVICE_ID_LEN);
+    TAL_PR_HEXDUMP_INFO("mac_string ", tuya_ble_current_para.auth_settings.mac_string, MAC_STRING_LEN);
 }
 
 STATIC VOID_T tuya_ble_disconnect_and_reset_timer_cb(tuya_ble_timer_t timer)
