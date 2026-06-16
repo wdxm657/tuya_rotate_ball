@@ -93,7 +93,7 @@ extern unsigned int ota_program_offset;
 #define BOARD_LOG_TX_PIN                        (TUYA_GPIO_NUM_16) // C0 日志输出引脚
 #endif
 
-#define USB_DEC TUYA_GPIO_NUM_27 // D3
+#define CHARGE_DETECT_PIN TUYA_GPIO_NUM_27 // D3
 #define AD_BAT  TUYA_GPIO_NUM_14 // B6 电池电量AD采样引脚
 #define AD_BAT_SWITCH TUYA_GPIO_NUM_0 //A0 电池电量AD采样开关，打开后AD_BAT引脚不能再当做普通GPIO使用
 #define CHARGE_SWITCH TUYA_GPIO_NUM_1 //A1 充电开关
@@ -102,6 +102,7 @@ extern unsigned int ota_program_offset;
 #define LED_B TUYA_GPIO_NUM_26 // D2
 #define M_INA TUYA_GPIO_NUM_12 // B4
 #define M_INB TUYA_GPIO_NUM_13 // B5
+#define VIBRATION_SENSOR_PIN TUYA_GPIO_NUM_28 // D4
 
 // IRQ NUM
 #ifndef BOARD_GPIO_IRQ_NUM
