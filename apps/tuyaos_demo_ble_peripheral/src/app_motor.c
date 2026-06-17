@@ -124,7 +124,7 @@ STATIC UINT32_T app_motor_get_duty(VOID_T)
         case GAME_MODE_FAST:
             return MOTOR_PWM_DUTY_100;
         case GAME_MODE_SLOW:
-            return MOTOR_PWM_DUTY_50;
+            return MOTOR_PWM_DUTY_75;
         case GAME_MODE_INTERACTIVE:
             /* 互动模式也用快速 100% 占空比 */
             return MOTOR_PWM_DUTY_100;

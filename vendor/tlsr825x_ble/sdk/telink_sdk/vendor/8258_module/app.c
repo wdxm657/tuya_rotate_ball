@@ -37,6 +37,7 @@
 #include "tal_rtc.h"
 #include "tal_uart.h"
 #include "tal_gpio.h"
+#include "tal_log.h"
 
 #include "tuya_ble_type.h"
 #include "tuya_ble_api.h"
@@ -98,6 +99,7 @@ _attribute_ram_code_ STATIC VOID_T app_power_management (VOID_T)
     bls_pm_setSuspendMask(SUSPEND_DISABLE);
 
     if(tkl_board_state_working) {
+        TAL_PR_DEBUG("tkl_board_state_working %d", tkl_board_state_working);
         return;
     }
 
@@ -106,6 +108,7 @@ _attribute_ram_code_ STATIC VOID_T app_power_management (VOID_T)
     }
 
     if(tkl_cpu_is_sleep()) {
+        TAL_PR_DEBUG("allow sleep", 1);
 #if (PM_DEEPSLEEP_RETENTION_ENABLE)
         if(tkl_ble_state == TY_BLE_STA_IDLE) {
             bls_pm_setWakeupSource(PM_WAKEUP_PAD);

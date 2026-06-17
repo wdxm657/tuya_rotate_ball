@@ -39,6 +39,7 @@ extern "C" {
  * 100% = 1000000,  50% = 500000
  */
 #define MOTOR_PWM_DUTY_100      1000000U
+#define MOTOR_PWM_DUTY_75       750000U
 #define MOTOR_PWM_DUTY_50       500000U
 #define MOTOR_PWM_DUTY_0        0U
 

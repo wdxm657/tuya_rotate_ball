@@ -400,13 +400,6 @@ OPERATE_RET tuya_init_second(VOID_T)
 OPERATE_RET tuya_init_third(VOID_T)
 {
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
-    TUYA_WAKEUP_SOURCE_BASE_CFG_T wakeup_cfg = {
-        .source = TUYA_WAKEUP_SOURCE_GPIO,
-        .wakeup_para.gpio_param.gpio_num = BOARD_KEY_PIN,
-        .wakeup_para.gpio_param.level = TUYA_GPIO_LEVEL_LOW,
-    };
-    tkl_wakeup_source_set(&wakeup_cfg);
-
     // TUYA_IIC_BASE_CFG_T iic_cfg = {
     //     .role = TUYA_IIC_MODE_MASTER,
     //     .speed = TUYA_IIC_BUS_SPEED_400K,
@@ -416,6 +409,12 @@ OPERATE_RET tuya_init_third(VOID_T)
 #endif
 
     /* ---- 模块初始化 ---- */
+    TUYA_WAKEUP_SOURCE_BASE_CFG_T wakeup_cfg = {
+        .source = TUYA_WAKEUP_SOURCE_GPIO,
+        .wakeup_para.gpio_param.gpio_num = BOARD_KEY_PIN,
+        .wakeup_para.gpio_param.level = TUYA_GPIO_LEVEL_LOW,
+    };
+    tkl_wakeup_source_set(&wakeup_cfg);
 
     /* 1. 状态机（须在其他模块之前初始化） */
     app_state_init();
@@ -468,8 +467,6 @@ OPERATE_RET tuya_init_last(VOID_T)
     tal_ble_advertising_start(&tal_adv_param);
 
     /* ---- DP 定时上报定时器 ---- */
-
-    /* 电池电量：每 60s 上报一次缓存值 */
     tal_sw_timer_create(dp_report_timeout_handler, NULL, &s_dp_report_timer_id);
     tal_sw_timer_start(s_dp_report_timer_id, 1000, TAL_TIMER_CYCLE);
 
