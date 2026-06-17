@@ -27,6 +27,7 @@
 #include "tal_sw_timer.h"
 #include "tal_gpio.h"
 #include "tal_system.h"
+#include "tal_flash.h"
 
 #include "tuya_ble_api.h"
 #include "tuya_ble_protocol_callback.h"
@@ -80,6 +81,9 @@ STATIC UINT32_T s_press_tick_ms = 0;
 
 /** 标记：在长按阈值到达时设为 TRUE，释放时据此判断是否执行长按动作 */
 STATIC BOOL_T s_long_press_eligible = FALSE;
+
+/** 开机时刻的系统滴答（ms），用于屏蔽开机3s内的短按 */
+STATIC UINT32_T s_boot_tick_ms = 0;
 
 /***********************************************************************
  ********************* static functions *********************************
@@ -174,11 +178,22 @@ STATIC VOID_T app_key_poll_handler(TIMER_ID timer_id, VOID_T *arg)
                         // tuya_ble_device_unbind();
                         tuya_ble_device_factory_reset();
                         tuya_ble_disconnect_and_reset_timer_start();
+                        // 写一个标志位到FLASH：标记本次为长按复位后冷启动
+                        tal_flash_erase(APP_DATA_FLASH_ADDR, 0x1000);
+                        {
+                            UINT8_T f_reset = 0x03;
+                            tal_flash_write(APP_DATA_FLASH_ADDR, &f_reset, 1);
+                        }
                     } else {
-                        /* 短按松开 → 开关机 */
-                        TAL_PR_INFO("[key] short press release (%dms) -> toggle power",
-                                    press_duration);
-                        app_state_toggle_power();
+                        /* 开机3s内的短按不做处理（防止唤醒按键被误认为开关机） */
+                        if (s_boot_tick_ms != 0 && (now_ms - s_boot_tick_ms) < 3000) {
+                            TAL_PR_DEBUG("[key] short press ignored (within 3s of boot)");
+                        } else {
+                            /* 短按松开 → 开关机 */
+                            TAL_PR_INFO("[key] short press release (%dms) -> toggle power",
+                                        press_duration);
+                            app_state_toggle_power();
+                        }
                     }
 
                     /* 回退 IDLE */
@@ -226,6 +241,7 @@ VOID_T app_key_init(VOID_T)
     s_debounce_cnt       = 0;
     s_press_tick_ms      = 0;
     s_long_press_eligible = FALSE;
+    s_boot_tick_ms       = tal_system_get_millisecond();
 
     TAL_PR_INFO("[key] custom driver initialized (poll %dms), pin %d",
                 KEY_POLL_MS, APP_KEY_PIN);

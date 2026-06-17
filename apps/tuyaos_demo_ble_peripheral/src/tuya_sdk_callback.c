@@ -21,6 +21,7 @@
 #include "tal_rtc.h"
 #include "tal_watchdog.h"
 #include "tal_gpio.h"
+#include "tal_flash.h"
 #include "tal_i2c.h"
 #include "tal_bluetooth.h"
 #include "tal_oled.h"
@@ -456,9 +457,11 @@ VOID_T power_off_cb(VOID_T){
     app_motor_stop();
     if(tal_app_server_conn_handle == 0XFFFF){
         // 蓝牙未连接则进入低功耗
+        TAL_PR_DEBUG("INTO LOW POWER");
         tal_cpu_allow_sleep();
     }else{
         // 蓝牙连接保活，不需要操作
+        TAL_PR_DEBUG("ONLY CLOSE MOTOR");
     }
 }
 
@@ -515,9 +518,20 @@ OPERATE_RET tuya_init_last(VOID_T)
     app_product_test_init();
 #endif // APP_PRODUCT_TEST
 #endif
-
-    // 初始化时开机
-    app_state_set_power(TRUE);
+    // 初始化结束后从FLASH中读取标志位
+    // 若标志位为0x00则认为是长按3秒后的复位启动，此时不能开机
+    {
+        UINT8_T f_reset = 0xFF;
+        tal_flash_read(APP_DATA_FLASH_ADDR, &f_reset, 1);
+        if (f_reset == 0x03) {
+            TAL_PR_INFO("[boot] factory-reset flag detected, staying off");
+        } else {
+            app_state_set_power(TRUE);
+        }
+        // 读取完后擦除FLASH标志位
+        tal_flash_erase(APP_DATA_FLASH_ADDR, 0x1000);
+    }
+    
     return OPRT_OK;
 }
 

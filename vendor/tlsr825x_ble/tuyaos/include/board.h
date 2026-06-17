@@ -93,6 +93,8 @@ extern unsigned int ota_program_offset;
 #define BOARD_LOG_TX_PIN                        (TUYA_GPIO_NUM_16) // C0 日志输出引脚
 #endif
 
+#define APP_DATA_FLASH_ADDR 0x7F000
+
 #define CHARGE_DETECT_PIN TUYA_GPIO_NUM_27 // D3
 #define AD_BAT  TUYA_GPIO_NUM_14 // B6 电池电量AD采样引脚
 #define AD_BAT_SWITCH TUYA_GPIO_NUM_0 //A0 电池电量AD采样开关，打开后AD_BAT引脚不能再当做普通GPIO使用
