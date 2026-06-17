@@ -201,9 +201,6 @@ BOOL_T app_state_toggle_power(VOID_T)
 
 BOOL_T app_state_set_power(BOOL_T on)
 {
-    if (on == s_powered) {
-        return s_powered;
-    }
 
     /* 充电中不允许开机 */
     if (on && s_charging) {

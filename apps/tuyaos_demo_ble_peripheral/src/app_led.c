@@ -151,7 +151,6 @@ VOID_T app_led_init(VOID_T)
     s_led_mode = LED_MODE_OFF;
     s_led_on = FALSE;
 
-    app_led_update();
     TAL_PR_INFO("[led] initialized");
 }
 
@@ -244,11 +243,10 @@ VOID_T app_led_update(VOID_T)
     {
         /* 关机：据配网状态区分指示 — 已配网则灭灯，未配网则蓝灯闪烁提示 */
         tuya_ble_connect_status_t conn_st = tuya_ble_connect_status_get();
+        // TAL_PR_DEBUG("conn_st %d", tuya_ble_connect_status_get());
         if (conn_st == BONDING_UNCONN || conn_st == BONDING_CONN) {
-            TAL_PR_DEBUG("BOND");
             new_mode = LED_MODE_OFF;
         } else {
-            TAL_PR_DEBUG("UNBOND");
             new_mode = LED_MODE_BLUE_BLINK;
         }
     }

@@ -134,6 +134,8 @@ STATIC VOID_T battery_critical_poweroff(VOID_T)
 /* DP定时上报：读取缓存值，仅上报有变更的DP */
 STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
 {
+    app_led_update();
+
     if(tal_app_server_conn_handle == 0XFFFF){
         return;
     }
@@ -206,8 +208,6 @@ STATIC VOID_T tuya_ble_evt_callback(TAL_BLE_EVT_PARAMS_T *p_event)
 
             tuya_ble_connected_handler();
 
-            /* BLE 连接 → 刷新 LED（蓝闪→绿闪） */
-            app_led_update();
         } break;
 
         case TAL_BLE_EVT_CENTRAL_CONNECT_DISCOVERY: {
@@ -232,9 +232,9 @@ STATIC VOID_T tuya_ble_evt_callback(TAL_BLE_EVT_PARAMS_T *p_event)
 #endif
             tal_app_server_conn_handle = 0xFFFF;
 
-            /* BLE 断开 → 刷新 LED（绿闪→蓝闪） */
-            if (app_state_is_powered_on()) {
-                app_led_update();
+            /* BLE 断开 且关机状态 → 进入低功耗 */
+            if (!app_state_is_powered_on()) {
+                tal_cpu_allow_sleep();
             }
         } break;
 
@@ -451,6 +451,21 @@ OPERATE_RET tuya_init_third(VOID_T)
     return OPRT_OK;
 }
 
+VOID_T power_off_cb(VOID_T){
+    //停止电机
+    app_motor_stop();
+    if(tal_app_server_conn_handle == 0XFFFF){
+        // 蓝牙未连接则进入低功耗
+        tal_cpu_allow_sleep();
+    }else{
+        // 蓝牙连接保活，不需要操作
+    }
+}
+
+VOID_T power_on_cb(VOID_T){
+    app_motor_start();
+}
+
 OPERATE_RET tuya_init_last(VOID_T)
 {
     // PB1 TX   PB7 RX
@@ -479,7 +494,7 @@ OPERATE_RET tuya_init_last(VOID_T)
     app_state_register_change_cb(led_on_state_change);
 
     /* 电源状态 → 电机启停（统一开关机，与物理按键/蓝牙 DP_SWITCH 一致） */
-    app_state_register_power_cb(app_motor_start, app_motor_stop);
+    app_state_register_power_cb(power_on_cb, power_off_cb);
 
     /* 临界低电 → 硬件关机保护 */
     // app_battery_register_critical_cb(battery_critical_poweroff);
@@ -501,6 +516,8 @@ OPERATE_RET tuya_init_last(VOID_T)
 #endif // APP_PRODUCT_TEST
 #endif
 
+    // 初始化时开机
+    app_state_set_power(TRUE);
     return OPRT_OK;
 }
 

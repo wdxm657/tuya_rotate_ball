@@ -108,37 +108,8 @@ _attribute_ram_code_ STATIC VOID_T app_power_management (VOID_T)
     }
 
     if(tkl_cpu_is_sleep()) {
-        TAL_PR_DEBUG("allow sleep", 1);
 #if (PM_DEEPSLEEP_RETENTION_ENABLE)
-        if(tkl_ble_state == TY_BLE_STA_IDLE) {
-            bls_pm_setWakeupSource(PM_WAKEUP_PAD);
-            if(tkl_sw_timer_next_tick > 0){
-                if (tkl_board_state_suspend) {
-                    cpu_sleep_wakeup(SUSPEND_MODE, PM_WAKEUP_PAD | PM_WAKEUP_TIMER, tkl_sw_timer_next_tick);
-                } else {
-                    cpu_sleep_wakeup(DEEPSLEEP_MODE_RET_SRAM_LOW32K, PM_WAKEUP_PAD | PM_WAKEUP_TIMER, tkl_sw_timer_next_tick);
-                }
-            }else{
-                if (tkl_board_state_suspend) {
-                    cpu_sleep_wakeup(SUSPEND_MODE, PM_WAKEUP_PAD, 0);
-                } else {
-                    cpu_sleep_wakeup(DEEPSLEEP_MODE_RET_SRAM_LOW32K, PM_WAKEUP_PAD, 0);
-                }
-            }
-
-        } else {
-            if(tkl_ble_trxfifo_not_empty()) {
-                bls_pm_setManualLatency(0);
-                return;
-            }
-
-            if(tkl_board_state_suspend) {
-                bls_pm_setSuspendMask(SUSPEND_ADV | SUSPEND_CONN);
-            } else {
-                bls_pm_setSuspendMask (SUSPEND_ADV | DEEPSLEEP_RETENTION_ADV | SUSPEND_CONN | DEEPSLEEP_RETENTION_CONN);
-            }
-            bls_pm_setWakeupSource(PM_WAKEUP_PAD);
-        }
+        cpu_sleep_wakeup(DEEPSLEEP_MODE, PM_WAKEUP_PAD, 0);
 #else
         bls_pm_setSuspendMask(SUSPEND_ADV | SUSPEND_CONN);
         bls_pm_setWakeupSource(PM_WAKEUP_PAD);
