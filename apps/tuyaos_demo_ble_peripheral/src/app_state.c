@@ -203,6 +203,7 @@ BOOL_T app_state_set_power(BOOL_T on)
 {
 
     /* 充电中不允许开机 */
+    TAL_PR_INFO("[state] s_charging=%s", s_charging ? "1" : "0");
     if (on && s_charging) {
         TAL_PR_WARN("[state] can't power on while charging");
         return FALSE;

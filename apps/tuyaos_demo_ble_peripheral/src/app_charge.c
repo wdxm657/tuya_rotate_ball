@@ -1,18 +1,19 @@
 /**
  * @file app_charge.c
- * @brief 充电检测实现 — 周期定时器轮询 GPIO 检测充电器插入/拔出
- * @version 1.0
- * @date 2026-06-15
+ * @brief 充电检测实现 — 双引脚联合判定充电状态
+ * @version 1.2
+ * @date 2026-06-17
  *
  * @copyright Copyright 2026 Tuya Inc. All Rights Reserved.
  *
- * 检测方案：
- *   1. 周期轮询：CHARGE_DETECT_PIN 每 100ms 读取一次电平
- *   2. 电压辅助：电池电压 > 4.0V 时辅助判定充电状态
+ * 双引脚判定：
+ *   USB_DET (D3)     — 高低电平检测 USB 插入（高=有USB）
+ *   CHARGE_STATE (A1) — 充电IC状态（低=充电中，高=满电/未充电）
  *
- * 当检测到充电器插入时，调用 app_state_set_charging(TRUE)，
- * 检测到拔出时调用 app_state_set_charging(FALSE)。
- * 状态机会据此切换 DEV_STATE_CHARGING / DEV_STATE_WORK。
+ * 状态组合：
+ *   USB_DET=LOW                    → USB未插入，不充电
+ *   USB_DET=HIGH, CHARGE_STATE=LOW → USB已插入，充电中 → DEV_STATE_CHARGING
+ *   USB_DET=HIGH, CHARGE_STATE=HIGH→ USB已插入，已满电 → DEV_STATE_CHARGE_DONE
  */
 
 #include "tal_log.h"
@@ -30,6 +31,13 @@
 /** GPIO 轮询间隔 ms */
 #define CHARGE_POLL_MS              100
 
+/** 充电状态枚举 */
+typedef enum {
+    CHG_STATE_NO_USB,       /**< USB未插入 */
+    CHG_STATE_CHARGING,     /**< USB已插入，充电中 */
+    CHG_STATE_CHARGE_DONE,  /**< USB已插入，已满电 */
+} charge_state_t;
+
 /***********************************************************************
  ********************* static variable *********************************
  **********************************************************************/
@@ -37,11 +45,8 @@
 /* 轮询定时器 */
 STATIC TIMER_ID s_charge_poll_timer_id = NULL;
 
-/* 当前 GPIO 检测到的充电器插入状态 */
-STATIC BOOL_T s_charge_detected = FALSE;
-
-/* 电池电压辅助判断：上次报告的电压，用于检测趋势 */
-STATIC INT32_T s_last_vol_mv = 0;
+/* 当前充电状态 */
+STATIC charge_state_t s_charge_state = CHG_STATE_NO_USB;
 
 /***********************************************************************
  ********************* static function prototypes **********************
@@ -54,37 +59,78 @@ STATIC VOID_T app_charge_poll_handler(TIMER_ID timer_id, VOID_T *arg);
  **********************************************************************/
 
 /**
- * @brief 轮询定时器回调 — 读取 GPIO 电平，检测变化后通知状态机
+ * @brief 读 USB_DET 引脚电平
+ * @return TRUE=USB已插入（高电平）
+ */
+STATIC BOOL_T app_charge_read_usb_det(VOID_T)
+{
+    TUYA_GPIO_LEVEL_E level = TUYA_GPIO_LEVEL_LOW;
+    if (tal_gpio_read(USB_DET, &level) != OPRT_OK) {
+        return FALSE;
+    }
+    return (level == TUYA_GPIO_LEVEL_HIGH);
+}
+
+/**
+ * @brief 读 CHARGE_STATE 引脚电平
+ * @return TRUE=充电中（低电平）
+ */
+STATIC BOOL_T app_charge_read_charge_state(VOID_T)
+{
+    TUYA_GPIO_LEVEL_E level = TUYA_GPIO_LEVEL_LOW;
+    if (tal_gpio_read(CHARGE_STATE, &level) != OPRT_OK) {
+        return FALSE;
+    }
+    return (level == TUYA_GPIO_LEVEL_LOW);
+}
+
+/**
+ * @brief 轮询定时器回调 — 双引脚联合判定充电状态
+ *
+ * USB_DET    | CHARGE_STATE | 结论
+ * -----------+--------------+-------------------
+ * LOW        | X            | USB未插入
+ * HIGH       | LOW          | 充电中
+ * HIGH       | HIGH         | 满电
  */
 STATIC VOID_T app_charge_poll_handler(TIMER_ID timer_id, VOID_T *arg)
 {
-    TUYA_GPIO_LEVEL_E level = TUYA_GPIO_LEVEL_LOW;
-    OPERATE_RET ret = tal_gpio_read(CHARGE_DETECT_PIN, &level);
-    if (ret != OPRT_OK) {
-        TAL_PR_DEBUG("[charge] gpio read fail: %d", ret);
-        return;
-    }
+    BOOL_T usb_in    = app_charge_read_usb_det();
+    BOOL_T is_active = app_charge_read_charge_state();
 
-    BOOL_T is_charging = (level == TUYA_GPIO_LEVEL_HIGH);
+    charge_state_t new_state;
 
-    if (is_charging == s_charge_detected) {
-        /* 状态未变化，无需处理 */
-        return;
-    }
-
-    TAL_PR_DEBUG("[charge] pin=%d level=%d",
-                 CHARGE_DETECT_PIN, level);
-
-    s_charge_detected = is_charging;
-
-    if (is_charging) {
-        TAL_PR_INFO("[charge] DETECTED (plugged)");
+    if (!usb_in) {
+        new_state = CHG_STATE_NO_USB;
+    } else if (is_active) {
+        new_state = CHG_STATE_CHARGING;
     } else {
-        TAL_PR_INFO("[charge] NOT detected (unplugged)");
+        new_state = CHG_STATE_CHARGE_DONE;
     }
 
-    /* 通知状态机 */
-    app_state_set_charging(is_charging);
+    if (new_state == s_charge_state) {
+        return; /* 状态未变化 */
+    }
+
+    TAL_PR_INFO("[charge] state: %d -> %d (USB_DET=%d, CHARGE_STATE=%d)",
+                s_charge_state, new_state, usb_in, is_active);
+
+    s_charge_state = new_state;
+
+    switch (new_state) {
+    case CHG_STATE_CHARGING:
+        app_state_set_charging(TRUE);
+        break;
+    case CHG_STATE_CHARGE_DONE:
+        app_state_set_charging(TRUE);
+        app_state_set_charge_done(TRUE);
+        break;
+    case CHG_STATE_NO_USB:
+    default:
+        app_state_set_charging(FALSE);
+        app_state_set_charge_done(FALSE);
+        break;
+    }
 }
 
 /***********************************************************************
@@ -94,13 +140,14 @@ STATIC VOID_T app_charge_poll_handler(TIMER_ID timer_id, VOID_T *arg)
 VOID_T app_charge_init(VOID_T)
 {
     TUYA_GPIO_BASE_CFG_T gpio_cfg = {
-        .mode   = TUYA_GPIO_PULLUP,       /* 默认上拉 */
+        .mode   = TUYA_GPIO_PULLUP,
         .direct = TUYA_GPIO_INPUT,
         .level  = TUYA_GPIO_LEVEL_LOW,
     };
 
-    /* 初始化 GPIO（不进中断，纯输入轮询） */
-    tal_gpio_init(CHARGE_DETECT_PIN, &gpio_cfg);
+    /* 初始化两个 GPIO（不进中断，纯输入轮询） */
+    tal_gpio_init(USB_DET, &gpio_cfg);
+    tal_gpio_init(CHARGE_STATE, &gpio_cfg);
 
     /* 创建轮询定时器 */
     OPERATE_RET ret = tal_sw_timer_create(app_charge_poll_handler, NULL,
@@ -110,26 +157,33 @@ VOID_T app_charge_init(VOID_T)
         return;
     }
 
-    /* 初始化时读取一次当前状态 */
-    TUYA_GPIO_LEVEL_E init_level = TUYA_GPIO_LEVEL_LOW;
-    tal_gpio_read(CHARGE_DETECT_PIN, &init_level);
-    s_charge_detected = (init_level == TUYA_GPIO_LEVEL_HIGH);
+    /* 初始化时读取一次双引脚状态 */
+    BOOL_T usb_in    = app_charge_read_usb_det();
+    BOOL_T is_active = app_charge_read_charge_state();
 
-    if (s_charge_detected) {
-        TAL_PR_INFO("[charge] init: charger plugged in");
-        /* 如果上电时充电器已插入，通知状态机 */
+    if (usb_in && is_active) {
+        s_charge_state = CHG_STATE_CHARGING;
         app_state_set_charging(TRUE);
+        TAL_PR_INFO("[charge] init: USB in + charging");
+    } else if (usb_in && !is_active) {
+        s_charge_state = CHG_STATE_CHARGE_DONE;
+        app_state_set_charging(TRUE);
+        app_state_set_charge_done(TRUE);
+        TAL_PR_INFO("[charge] init: USB in + charge done");
+    } else {
+        app_state_set_charging(FALSE);
+        s_charge_state = CHG_STATE_NO_USB;
+        TAL_PR_INFO("[charge] init: no USB");
     }
 
     /* 启动周期轮询定时器 */
     tal_sw_timer_start(s_charge_poll_timer_id, CHARGE_POLL_MS, TAL_TIMER_CYCLE);
 
-    s_last_vol_mv = 0;
-    TAL_PR_INFO("[charge] initialized (poll %dms), pin %d, init=%d",
-                CHARGE_POLL_MS, CHARGE_DETECT_PIN, s_charge_detected);
+    TAL_PR_INFO("[charge] initialized (poll %dms), USB_DET=%d, CHARGE_STATE=%d",
+                CHARGE_POLL_MS, usb_in, is_active);
 }
 
 BOOL_T app_charge_is_detected(VOID_T)
 {
-    return s_charge_detected;
+    return (s_charge_state == CHG_STATE_CHARGING);
 }

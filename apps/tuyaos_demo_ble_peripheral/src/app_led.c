@@ -247,7 +247,15 @@ VOID_T app_led_update(VOID_T)
         if (conn_st == BONDING_UNCONN || conn_st == BONDING_CONN) {
             new_mode = LED_MODE_OFF;
         } else {
-            new_mode = LED_MODE_BLUE_BLINK;
+            // 若标志位为0x03则认为是长按3秒后的复位启动
+            UINT8_T f_reset = 0xFF;
+            tal_flash_read(APP_DATA_FLASH_ADDR, &f_reset, 1);
+            if (f_reset == 0x03) {
+                TAL_PR_INFO("[boot] factory-reset flag detected, staying off");
+                new_mode = LED_MODE_BLUE_BLINK;
+            } else {
+                new_mode = LED_MODE_OFF;
+            }
         }
     }
     // else if (app_state_get() == DEV_STATE_CHARGE_DONE)

@@ -95,10 +95,10 @@ extern unsigned int ota_program_offset;
 
 #define APP_DATA_FLASH_ADDR 0x7F000
 
-#define CHARGE_DETECT_PIN TUYA_GPIO_NUM_27 // D3
+#define USB_DET TUYA_GPIO_NUM_27 // D3 USB插入检测（高电平=USB插入）
+#define CHARGE_STATE TUYA_GPIO_NUM_1 // A1 充电状态输入（上拉，充电中=低，满电/未充电=高）
 #define AD_BAT  TUYA_GPIO_NUM_14 // B6 电池电量AD采样引脚
 #define AD_BAT_SWITCH TUYA_GPIO_NUM_0 //A0 电池电量AD采样开关，打开后AD_BAT引脚不能再当做普通GPIO使用
-#define CHARGE_SWITCH TUYA_GPIO_NUM_1 //A1 充电开关
 #define LED_R TUYA_GPIO_NUM_19 // C3
 #define LED_G TUYA_GPIO_NUM_18 // C2
 #define LED_B TUYA_GPIO_NUM_26 // D2

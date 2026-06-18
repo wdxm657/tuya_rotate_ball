@@ -1,18 +1,23 @@
 /**
  * @file app_charge.h
- * @brief 充电检测模块 — 周期定时器轮询 GPIO 检测充电器插入/拔出
- * @version 1.0
- * @date 2026-06-15
+ * @brief 充电检测模块 — 双引脚联合判定充电/满电/未插入
+ * @version 1.2
+ * @date 2026-06-17
  *
  * @copyright Copyright 2026 Tuya Inc. All Rights Reserved.
  *
  * 硬件连接：
- *   CHARGE_DETECT_PIN — GPIO 输入，高电平=充电器插入（通过电阻分压接 VBUS）
- *   CHARGE_SWITCH     — GPIO 输出，控制充电 MOSFET 使能
+ *   USB_DET (D3)      — 上拉输入，高电平=USB插入
+ *   CHARGE_STATE (A1) — 上拉输入，低电平=充电中，高电平=满电/未充电
+ *
+ * 联合判定：
+ *   USB_DET=LOW                 → 未插入USB
+ *   USB_DET=HIGH, CHG_STATE=LOW → 充电中
+ *   USB_DET=HIGH, CHG_STATE=HIGH→ 满电
  *
  * 检测方式：
- *   主：周期定时器(100ms)轮询 GPIO 电平
- *   辅：电池电压监测（当电压 > 4.0V 时辅助判断，在 battery_report 周期中执行）
+ *   主：周期定时器(100ms)轮询双引脚电平
+ *   辅：电池电压监测（当电压 > 4.0V 时辅助判断）
  */
 
 #ifndef __APP_CHARGE_H__
@@ -39,9 +44,9 @@ extern "C" {
  **********************************************************************/
 
 /**
- * @brief 初始化充电检测（GPIO 输入 + 周期轮询定时器）
- *   - 设置 CHARGE_DETECT_PIN 为上拉输入
- *   - 创建并启动 100ms 周期定时器轮询电平
+ * @brief 初始化充电检测（双 GPIO 输入 + 周期轮询定时器）
+ *   - 设置 USB_DET + CHARGE_STATE 为上拉输入
+ *   - 创建并启动 100ms 周期定时器轮询双引脚电平
  *   - 启动时读取一次引脚状态，避免错过初始状态
  */
 VOID_T app_charge_init(VOID_T);

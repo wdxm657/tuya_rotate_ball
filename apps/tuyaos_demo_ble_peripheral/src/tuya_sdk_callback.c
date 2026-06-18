@@ -204,7 +204,8 @@ STATIC VOID_T tuya_ble_evt_callback(TAL_BLE_EVT_PARAMS_T *p_event)
 
         case TAL_BLE_EVT_PERIPHERAL_CONNECT: {
             TAL_PR_INFO("connected");
-
+            // 清除配网标志位
+            tal_flash_erase(APP_DATA_FLASH_ADDR, 0x1000);
             tal_app_server_conn_handle = p_event->ble_event.connect.peer.conn_handle;
 
             tuya_ble_connected_handler();
@@ -409,7 +410,7 @@ OPERATE_RET tuya_init_third(VOID_T)
     // tal_i2c_init(TUYA_I2C_NUM_0, &iic_cfg);
 #endif
 
-    /* ---- 模块初始化 ---- */
+    // 增加按键IO按下时唤醒低功耗
     TUYA_WAKEUP_SOURCE_BASE_CFG_T wakeup_cfg = {
         .source = TUYA_WAKEUP_SOURCE_GPIO,
         .wakeup_para.gpio_param.gpio_num = BOARD_KEY_PIN,
@@ -417,6 +418,15 @@ OPERATE_RET tuya_init_third(VOID_T)
     };
     tkl_wakeup_source_set(&wakeup_cfg);
 
+    // 增加USB IO插入时唤醒低功耗
+    TUYA_WAKEUP_SOURCE_BASE_CFG_T usb_wakeup_cfg = {
+        .source = TUYA_WAKEUP_SOURCE_GPIO,
+        .wakeup_para.gpio_param.gpio_num = USB_DET,
+        .wakeup_para.gpio_param.level = TUYA_GPIO_LEVEL_HIGH,
+    };
+    tkl_wakeup_source_set(&usb_wakeup_cfg);
+
+    /* ---- 模块初始化 ---- */
     /* 1. 状态机（须在其他模块之前初始化） */
     app_state_init();
 
@@ -427,7 +437,6 @@ OPERATE_RET tuya_init_third(VOID_T)
         .level  = TUYA_GPIO_LEVEL_HIGH,
     };
     tal_gpio_init(AD_BAT_SWITCH, &gpio_out_high);
-    tal_gpio_init(CHARGE_SWITCH, &gpio_out_high);
 
     /* 3. M_INA/M_INB GPIO 初始化已移除 — 由 app_motor_init() 内的 PWM 接管 */
 
@@ -457,6 +466,10 @@ VOID_T power_off_cb(VOID_T){
     app_motor_stop();
     if(tal_app_server_conn_handle == 0XFFFF){
         // 蓝牙未连接则进入低功耗
+        // 清除配网标志位
+        tal_flash_erase(APP_DATA_FLASH_ADDR, 0x1000);
+        // 关闭AD_BAT_SWITCH
+        tal_gpio_write(AD_BAT_SWITCH, TUYA_GPIO_LEVEL_LOW);
         TAL_PR_DEBUG("INTO LOW POWER");
         tal_cpu_allow_sleep();
     }else{
@@ -519,7 +532,7 @@ OPERATE_RET tuya_init_last(VOID_T)
 #endif // APP_PRODUCT_TEST
 #endif
     // 初始化结束后从FLASH中读取标志位
-    // 若标志位为0x00则认为是长按3秒后的复位启动，此时不能开机
+    // 若标志位为0x03则认为是长按3秒后的复位启动，此时不能开机
     {
         UINT8_T f_reset = 0xFF;
         tal_flash_read(APP_DATA_FLASH_ADDR, &f_reset, 1);
@@ -528,8 +541,6 @@ OPERATE_RET tuya_init_last(VOID_T)
         } else {
             app_state_set_power(TRUE);
         }
-        // 读取完后擦除FLASH标志位
-        tal_flash_erase(APP_DATA_FLASH_ADDR, 0x1000);
     }
     
     return OPRT_OK;
