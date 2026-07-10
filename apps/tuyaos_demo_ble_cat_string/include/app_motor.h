@@ -17,8 +17,8 @@ extern "C" {
 #define MOTOR_DIR_FORWARD   1
 #define MOTOR_DIR_REVERSE   2
 
-#define MOTOR_PWM_CH_FOR        TUYA_PWM_NUM_3
-#define MOTOR_PWM_CH_REV        TUYA_PWM_NUM_2
+#define MOTOR_PWM_CH_FOR        MOTOR_FOR
+#define MOTOR_PWM_CH_REV        MOTOR_REV
 #define MOTOR_PWM_FREQ_HZ       1000
 
 #define MOTOR_PWM_DUTY_100      1000000U

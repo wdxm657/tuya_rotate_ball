@@ -21,7 +21,7 @@
 #include "tal_sw_timer.h"
 #include "tal_gpio.h"
 #include "tal_system.h"
-#include "board_cat_string.h"
+#include "board.h"
 
 #include "app_battery.h"
 #include "app_state.h"

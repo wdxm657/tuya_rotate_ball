@@ -11,7 +11,7 @@
 
 #include "string.h"
 
-#include "board_cat_string.h"
+#include "board.h"
 
 #include "tkl_wakeup.h"
 
@@ -377,8 +377,8 @@ OPERATE_RET tuya_init_first(VOID_T)
         .direct = TUYA_GPIO_OUTPUT,
         .level = TUYA_GPIO_LEVEL_LOW,
     };
-    tal_gpio_init(BOARD_POWER_ON_PIN, &gpio_cfg);
-    tal_gpio_write(BOARD_POWER_ON_PIN, TUYA_GPIO_LEVEL_HIGH);
+    // tal_gpio_init(BOARD_POWER_ON_PIN, &gpio_cfg);
+    // tal_gpio_write(BOARD_POWER_ON_PIN, TUYA_GPIO_LEVEL_HIGH);
 #endif
 
     extern VOID_T tuya_memory_init(VOID_T);
@@ -443,21 +443,19 @@ OPERATE_RET tuya_init_third(VOID_T)
     };
     tal_gpio_init(AD_Bat_CON, &gpio_out_high);
 
-    /* 3. M_INA/M_INB GPIO 初始化已移除 — 由 app_motor_init() 内的 PWM 接管 */
-
-    /* 4. 按键（一直运行） */
+    /* 3. 按键（一直运行） */
     app_key_init();
 
-    /* 5. LED 指示灯 */
+    /* 4. LED 指示灯 */
     app_led_init();
 
-    /* 6. 电池监测（ADC+定时器） */
+    /* 5. 电池监测（ADC+定时器） */
     app_battery_init();
 
-    /* 7. 充电检测（GPIO轮询） */
+    /* 6. 充电检测（GPIO轮询） */
     app_charge_init();
 
-    /* 8. 电机 (PWM 初始化) */
+    /* 7. 电机 (PWM 初始化) */
     app_motor_init();
 
     return OPRT_OK;
@@ -466,14 +464,14 @@ OPERATE_RET tuya_init_third(VOID_T)
 STATIC VOID_T run_off_cb(VOID_T)
 {
     app_motor_stop();
-    tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_LOW);
+    // tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_LOW);
     app_led_update();
 }
 
 STATIC VOID_T run_on_cb(VOID_T)
 {
     if (app_state_is_charging()) {
-        tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_HIGH);
+        // tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_HIGH);
     }
     app_motor_start();
     app_led_update();
@@ -521,8 +519,8 @@ OPERATE_RET tuya_init_last(VOID_T)
     app_state_register_power_cb(run_on_cb, run_off_cb);
     app_state_register_machine_power_cb(machine_power_on_cb, machine_power_off_cb);
 
-    /* 临界低电 → 硬件关机保护 */
-    app_battery_register_critical_cb(battery_critical_poweroff);
+    /* 临界低电 → 硬件关机保护 暂时关闭*/
+    // app_battery_register_critical_cb(battery_critical_poweroff);
 
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
     // if (tal_oled_init() == OPRT_OK) {

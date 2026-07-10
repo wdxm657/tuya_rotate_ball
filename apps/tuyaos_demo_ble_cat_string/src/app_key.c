@@ -21,7 +21,7 @@
  *   不使用 tal_key 库（该库存在稳定性缺陷）。
  */
 
-#include "board_cat_string.h"
+#include "board.h"
 
 #include "tal_log.h"
 #include "tal_sw_timer.h"

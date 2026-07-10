@@ -17,7 +17,7 @@
 #define __APP_BATTERY_H__
 
 #include "tuya_cloud_types.h"
-#include "board_cat_string.h"
+#include "board.h"
 
 #ifdef __cplusplus
 extern "C" {

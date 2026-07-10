@@ -7,7 +7,7 @@
 #include "tal_sw_timer.h"
 #include "tal_gpio.h"
 
-#include "board_cat_string.h"
+#include "board.h"
 #include "app_charge.h"
 #include "app_state.h"
 #include "app_led.h"
@@ -48,15 +48,15 @@ STATIC VOID_T app_charge_apply_state(charge_state_t state)
     if (state == CHG_STATE_CHARGING) {
         app_state_set_charging(TRUE);
         app_state_set_charge_done(FALSE);
-        tal_gpio_write(Set_Charg_I, app_state_is_powered_on() ? TUYA_GPIO_LEVEL_HIGH : TUYA_GPIO_LEVEL_LOW);
+        // tal_gpio_write(Set_Charg_I, app_state_is_powered_on() ? TUYA_GPIO_LEVEL_HIGH : TUYA_GPIO_LEVEL_LOW);
     } else if (state == CHG_STATE_FULL) {
         app_state_set_charging(FALSE);
         app_state_set_charge_done(TRUE);
-        tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_LOW);
+        // tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_LOW);
     } else {
         app_state_set_charging(FALSE);
         app_state_set_charge_done(FALSE);
-        tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_LOW);
+        // tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_LOW);
     }
 
     app_led_update();
@@ -98,10 +98,10 @@ VOID_T app_charge_init(VOID_T)
     tal_gpio_init(USB_DET, &input_cfg);
     tal_gpio_init(CHARGE_STATE, &input_cfg);
     tal_gpio_init(CHARGE_EN, &output_cfg);
-    tal_gpio_init(Set_Charg_I, &output_cfg);
+    // tal_gpio_init(Set_Charg_I, &output_cfg);
 
     tal_gpio_write(CHARGE_EN, TUYA_GPIO_LEVEL_HIGH);
-    tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_LOW);
+    // tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_LOW);
 
     s_charge_state = CHG_STATE_NO_USB;
     tal_sw_timer_create(app_charge_poll_handler, NULL, &s_charge_timer_id);

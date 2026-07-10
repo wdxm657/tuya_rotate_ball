@@ -6,7 +6,7 @@
 #include "tal_sw_timer.h"
 #include "tal_gpio.h"
 
-#include "board_cat_string.h"
+#include "board.h"
 #include "tuya_ble_main.h"
 #include "app_led.h"
 #include "app_state.h"

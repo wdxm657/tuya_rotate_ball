@@ -7,7 +7,7 @@
 #include "tal_sw_timer.h"
 #include "tal_pwm.h"
 
-#include "board_cat_string.h"
+#include "board.h"
 #include "app_motor.h"
 
 #define VARIABLE_SEQ_STEPS  8

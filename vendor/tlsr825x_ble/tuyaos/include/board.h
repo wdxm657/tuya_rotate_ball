@@ -79,7 +79,50 @@ extern unsigned int ota_program_offset;
 // #ifndef BOARD_FLASH_MAC_START_ADDR
 // #define BOARD_FLASH_MAC_START_ADDR              (0)
 // #endif
+#define APP_DATA_FLASH_ADDR 0x7F000
+#define CAT_STRING 1
+#define BLE_BALL 0
 
+// PIN
+// #ifndef BOARD_POWER_ON_PIN
+// #define BOARD_POWER_ON_PIN                      (TUYA_GPIO_NUM_31) // D7 无用 测试引脚
+// #endif
+#if CAT_STRING
+#ifndef BOARD_KEY_PIN
+#define BOARD_KEY_PIN                           (TUYA_GPIO_NUM_16) // C0 按键
+#endif
+
+#if (BOARD_ENABLE_LOG)
+#ifndef BOARD_LOG_TX_PIN
+#define BOARD_LOG_TX_PIN                        (TUYA_GPIO_NUM_20) // C4 日志输出引脚
+#endif
+#endif
+
+
+#define CHARGE_G        TUYA_GPIO_NUM_27 // D3 充电指示灯 绿色
+#define CHARGE_R        TUYA_GPIO_NUM_31 // D7 充电指示灯 红色
+#define USB_DET         TUYA_GPIO_NUM_14 // B6 USB插入检测（高电平=USB插入）
+#define LED_B           TUYA_GPIO_NUM_0  // A0 状态指示灯 蓝色
+#define LED_G           TUYA_GPIO_NUM_1  // A1 状态指示灯 绿色
+#define AD_Bat_CON      TUYA_GPIO_NUM_26 // D2 电量ADC控制开关 高电平开 低电平关
+// 以下两个在调试阶段暂时禁用
+// #define Set_Charg_I     TUYA_GPIO_NUM_9  // B1 充电电流限流开关 充电中且当电机运行时打拉高，电机停止时拉低
+// #define AD_NTC_CON      TUYA_GPIO_NUM_15 // B7 电池NTC控制开关 高电平开 低电平关
+#define CHARGE_STATE    TUYA_GPIO_NUM_17 // C1 充电状态输入检测 低电平充电中高电平满电
+#define CHARGE_EN       TUYA_GPIO_NUM_28 // D4 充电芯片 高电平开 低电平关
+
+#define AD_Bat 4   // PB4
+#define AD_Motor 5 // PB5
+// #define AD_NTC 5  // PC4
+
+
+#define MOTOR_REV       TUYA_PWM_NUM_0 // C2 电机反转 PWM_OUTPUT
+#define MOTOR_FOR       TUYA_PWM_NUM_1 // C3 电机正转 PWM_OUTPUT
+
+#if (!BOARD_ENABLE_LOG)
+#define AD_NTC 8   // PC4
+#endif
+#elif BLE_BALL
 // PIN
 #ifndef BOARD_POWER_ON_PIN
 #define BOARD_POWER_ON_PIN                      (TUYA_GPIO_NUM_31) // D7 无用 测试引脚
@@ -93,7 +136,6 @@ extern unsigned int ota_program_offset;
 #define BOARD_LOG_TX_PIN                        (TUYA_GPIO_NUM_16) // C0 日志输出引脚
 #endif
 
-#define APP_DATA_FLASH_ADDR 0x7F000
 
 #define USB_DET TUYA_GPIO_NUM_27 // D3 USB插入检测（高电平=USB插入）
 #define CHARGE_STATE TUYA_GPIO_NUM_1 // A1 充电状态输入（上拉，充电中=低，满电/未充电=高）
@@ -105,7 +147,7 @@ extern unsigned int ota_program_offset;
 #define M_INA TUYA_GPIO_NUM_12 // B4
 #define M_INB TUYA_GPIO_NUM_13 // B5
 #define VIBRATION_SENSOR_PIN TUYA_GPIO_NUM_28 // D4
-
+#endif
 // IRQ NUM
 #ifndef BOARD_GPIO_IRQ_NUM
 #define BOARD_GPIO_IRQ_NUM                      (2)
