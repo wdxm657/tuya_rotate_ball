@@ -31,7 +31,7 @@ extern "C" {
 #define BATTERY_VOLT_EMPTY_MV       3000    /**< 亏电电压 mV */
 
 /* ---------- ADC 参数 ---------- */
-#define BATTERY_ADC_CH              6       /**< 电池 ADC 通道号 (PB6) */
+#define BATTERY_ADC_CH              4       /**< 电池 ADC 通道号 (PB4) */
 #define BATTERY_DIVIDER_RATIO       2       /**< 硬件分压比 */
 
 /* ---------- 采样滤波 ---------- */
