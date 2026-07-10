@@ -7,7 +7,7 @@
  * @copyright Copyright 2026 Tuya Inc. All Rights Reserved.
  *
  * 设计原则：
- *   1. AD_BAT_SWITCH 在初始化时开启后保持常开，不每次采样开关
+ *   1. AD_Bat_CON 在运行时开启，机身关机时关闭
  *   2. 内部 2 秒定时器周期性 ADC 采样 → 均值滤波 → 更新缓存
  *   3. 外部模块一律通过 Get 接口获取缓存值，不阻塞采样
  *   4. 临界低电（< 5%）自动触发深度睡眠，防止电池过放损坏
@@ -21,7 +21,7 @@
 #include "tal_sw_timer.h"
 #include "tal_gpio.h"
 #include "tal_system.h"
-#include "board.h"
+#include "board_cat_string.h"
 
 #include "app_battery.h"
 #include "app_state.h"
@@ -125,7 +125,7 @@ STATIC UINT8_T app_battery_voltage_to_percent(INT32_T vol_mv)
 }
 
 /**
- * @brief ADC 读取 + 均值滤波（内部使用，不做开关 AD_BAT_SWITCH）
+ * @brief ADC 读取 + 均值滤波
  * @param[out] vol_mv 电压 mV
  * @return OPRT_OK 成功
  */
@@ -141,7 +141,7 @@ STATIC OPERATE_RET app_battery_sample(INT32_T *vol_mv)
         return OPRT_INVALID_PARM;
     }
 
-    /* 多次 ADC 采样并累加（AD_BAT_SWITCH 已常开，无需等待稳定） */
+    /* 多次 ADC 采样并累加 */
     for (i = 0; i < BATTERY_ADC_SAMPLES; i++) {
         ret = tal_adc_read_voltage(TUYA_ADC_NUM_0, &adc_raw, 1);
         if (ret != OPRT_OK) {
@@ -222,8 +222,7 @@ STATIC VOID_T app_battery_monitor_handler(TIMER_ID timer_id, VOID_T *arg)
             TAL_PR_ERR("[battery] CRITICAL: %d%% — entering deep sleep!", percent);
         }
 
-        /* 触发注册的临界低电回调（由 tuya_sdk_callback 注册关机逻辑） */
-        if (s_critical_cb != NULL) {
+        if (!app_state_is_charging() && s_critical_cb != NULL) {
             s_critical_cb();
         }
     } else {
@@ -238,6 +237,14 @@ STATIC VOID_T app_battery_monitor_handler(TIMER_ID timer_id, VOID_T *arg)
 OPERATE_RET app_battery_init(VOID_T)
 {
     OPERATE_RET ret;
+
+    if (s_adc_inited) {
+        if (s_monitor_timer_id != NULL) {
+            tal_sw_timer_start(s_monitor_timer_id, BATTERY_MONITOR_INTERVAL_MS, TAL_TIMER_CYCLE);
+        }
+        tal_gpio_write(AD_Bat_CON, TUYA_GPIO_LEVEL_HIGH);
+        return OPRT_OK;
+    }
 
     /* ---------- ADC 初始化 ---------- */
     TUYA_ADC_BASE_CFG_T adc_cfg = {
@@ -254,7 +261,13 @@ OPERATE_RET app_battery_init(VOID_T)
     }
 
     /* ---------- 使能分压电路（常开，不再开关） ---------- */
-    tal_gpio_write(AD_BAT_SWITCH, TUYA_GPIO_LEVEL_HIGH);
+    TUYA_GPIO_BASE_CFG_T gpio_out = {
+        .mode   = TUYA_GPIO_PUSH_PULL,
+        .direct = TUYA_GPIO_OUTPUT,
+        .level  = TUYA_GPIO_LEVEL_HIGH,
+    };
+    tal_gpio_init(AD_Bat_CON, &gpio_out);
+    tal_gpio_write(AD_Bat_CON, TUYA_GPIO_LEVEL_HIGH);
     tal_system_delay(10);  /* 等待电压稳定 */
 
     /* ---------- 首次采样初始化缓存 ---------- */
@@ -268,12 +281,37 @@ OPERATE_RET app_battery_init(VOID_T)
     }
 
     /* ---------- 创建监测定时器（0.5 秒周期） ---------- */
-    tal_sw_timer_create(app_battery_monitor_handler, NULL, &s_monitor_timer_id);
+    if (s_monitor_timer_id == NULL) {
+        tal_sw_timer_create(app_battery_monitor_handler, NULL, &s_monitor_timer_id);
+    }
     tal_sw_timer_start(s_monitor_timer_id, BATTERY_MONITOR_INTERVAL_MS, TAL_TIMER_CYCLE);
 
     s_adc_inited = TRUE;
     TAL_PR_INFO("[battery] monitoring started, interval=%dms", BATTERY_MONITOR_INTERVAL_MS);
     return OPRT_OK;
+}
+
+OPERATE_RET app_battery_resume(VOID_T)
+{
+    return app_battery_init();
+}
+
+VOID_T app_battery_suspend(VOID_T)
+{
+    if (s_monitor_timer_id != NULL) {
+        tal_sw_timer_stop(s_monitor_timer_id);
+    }
+    if (s_adc_inited) {
+        tal_adc_deinit(TUYA_ADC_NUM_0);
+        s_adc_inited = FALSE;
+    }
+
+    TUYA_GPIO_BASE_CFG_T gpio_cfg = {
+        .mode   = TUYA_GPIO_PULLDOWN,
+        .direct = TUYA_GPIO_INPUT,
+        .level  = TUYA_GPIO_LEVEL_LOW,
+    };
+    tal_gpio_init(AD_Bat_CON, &gpio_cfg);
 }
 
 OPERATE_RET app_battery_read_voltage(INT32_T *vol_mv)

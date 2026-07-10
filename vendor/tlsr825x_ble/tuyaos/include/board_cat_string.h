@@ -109,9 +109,9 @@ extern unsigned int ota_program_offset;
 #define CHARGE_STATE    TUYA_GPIO_NUM_17 // C1 充电状态输入检测 低电平充电中高电平满电
 #define CHARGE_EN       TUYA_GPIO_NUM_28 // D4 充电芯片 高电平开 低电平关
 
-#define AD_Bat 4 // PB4
+#define AD_Bat 4   // PB4
 #define AD_Motor 5 // PB5
-#define AD_Motor 8 // PC4
+#define AD_NTC 8   // PC4
 
 
 // IRQ NUM

@@ -17,6 +17,7 @@
 #define __APP_BATTERY_H__
 
 #include "tuya_cloud_types.h"
+#include "board_cat_string.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -31,7 +32,7 @@ extern "C" {
 #define BATTERY_VOLT_EMPTY_MV       3000    /**< 亏电电压 mV */
 
 /* ---------- ADC 参数 ---------- */
-#define BATTERY_ADC_CH              4       /**< 电池 ADC 通道号 (PB4) */
+#define BATTERY_ADC_CH              AD_Bat  /**< 电池 ADC 通道号 */
 #define BATTERY_DIVIDER_RATIO       2       /**< 硬件分压比 */
 
 /* ---------- 采样滤波 ---------- */
@@ -54,6 +55,8 @@ extern "C" {
  * @return OPRT_OK 成功
  */
 OPERATE_RET app_battery_init(VOID_T);
+OPERATE_RET app_battery_resume(VOID_T);
+VOID_T app_battery_suspend(VOID_T);
 
 /**
  * @brief 读取一次电池电压（AD_BAT_SWITCH 已常开，直接 ADC 采样）

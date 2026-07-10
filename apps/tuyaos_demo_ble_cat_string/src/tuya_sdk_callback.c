@@ -11,7 +11,7 @@
 
 #include "string.h"
 
-#include "board.h"
+#include "board_cat_string.h"
 
 #include "tkl_wakeup.h"
 
@@ -47,7 +47,6 @@
 #include "app_motor.h"
 #include "app_battery.h"
 #include "app_charge.h"
-#include "app_vibration.h"
 
 /***********************************************************************
  ********************* constant ( macro and enum ) *********************
@@ -70,8 +69,6 @@ UINT16_T tal_app_server_conn_handle = 0xFFFF;
 STATIC TIMER_ID s_dp_report_timer_id = NULL;
 
 /* 设备状态DP定时上报（向APP周期性通知 work_state） */
-STATIC TIMER_ID s_work_state_report_timer_id = NULL;
-
 TAL_UART_CFG_T tal_uart_cfg = {
     .rx_buffer_size = 256,
     .open_mode = O_BLOCK,
@@ -124,8 +121,7 @@ STATIC VOID_T led_on_state_change(dev_state_t old_state, dev_state_t new_state)
  */
 STATIC VOID_T battery_critical_poweroff(VOID_T)
 {
-    /* 硬件关机（进入低功耗保护） */
-    app_state_set_power(FALSE);
+    app_state_set_low_voltage_lock(TRUE);
 }
 
 /***********************************************************************
@@ -144,6 +140,7 @@ STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
     static UINT8_T s_last_battery = 0xFF;
     static UINT8_T s_last_switch  = 0xFF;
     static UINT8_T s_last_mode    = 0xFF;
+    static UINT8_T s_last_speed   = 0xFF;
     static UINT8_T s_last_work_state = 0xFF;
 
     UINT8_T buf[DT_VALUE_LEN] = {0};
@@ -153,7 +150,6 @@ STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
         UINT8_T percent = app_battery_get_percent();
         if (percent != s_last_battery) {
             s_last_battery = percent;
-            /* DT_VALUE: 4字节小端 int，第4字节为有效值 */
             buf[3] = percent;
             app_dp_report(DP_ID_BATTERY, buf, DT_VALUE_LEN);
             TAL_PR_DEBUG("[dp] battery report: %d%%", percent);
@@ -162,13 +158,25 @@ STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
 
     /* 开关状态 */
     {
-        UINT8_T power_on = app_state_is_powered_on() ? 1 : 0;
+        UINT8_T power_on = app_state_is_app_power_on() ? 1 : 0;
         if (power_on != s_last_switch) {
             s_last_switch = power_on;
             memset(buf, 0, DT_VALUE_LEN);
             buf[0] = power_on;
             app_dp_report(DP_ID_SWITCH, buf, DT_BOOL_LEN);
             TAL_PR_DEBUG("[dp] switch report: %d", power_on);
+        }
+    }
+
+    /* 速度挡位 */
+    {
+        UINT8_T speed = app_motor_get_speed_level();
+        if (speed != s_last_speed) {
+            s_last_speed = speed;
+            memset(buf, 0, DT_VALUE_LEN);
+            buf[0] = speed;
+            app_dp_report(DP_ID_SPEED_LEVEL, buf, DT_ENUM_LEN);
+            TAL_PR_DEBUG("[dp] speed report: %d", speed);
         }
     }
 
@@ -209,6 +217,7 @@ STATIC VOID_T tuya_ble_evt_callback(TAL_BLE_EVT_PARAMS_T *p_event)
             tal_app_server_conn_handle = p_event->ble_event.connect.peer.conn_handle;
 
             tuya_ble_connected_handler();
+            app_led_update();
 
         } break;
 
@@ -233,11 +242,7 @@ STATIC VOID_T tuya_ble_evt_callback(TAL_BLE_EVT_PARAMS_T *p_event)
             tal_ble_advertising_start(&tal_adv_param);
 #endif
             tal_app_server_conn_handle = 0xFFFF;
-
-            /* BLE 断开 且关机状态 → 进入低功耗 */
-            if (!app_state_is_powered_on()) {
-                app_state_set_power(FALSE);
-            }
+            app_led_update();
         } break;
 
         case TAL_BLE_EVT_ADV_REPORT: {
@@ -436,7 +441,7 @@ OPERATE_RET tuya_init_third(VOID_T)
         .direct = TUYA_GPIO_OUTPUT,
         .level  = TUYA_GPIO_LEVEL_LOW,
     };
-    tal_gpio_init(AD_BAT_SWITCH, &gpio_out_high);
+    tal_gpio_init(AD_Bat_CON, &gpio_out_high);
 
     /* 3. M_INA/M_INB GPIO 初始化已移除 — 由 app_motor_init() 内的 PWM 接管 */
 
@@ -455,39 +460,37 @@ OPERATE_RET tuya_init_third(VOID_T)
     /* 8. 电机 (PWM 初始化) */
     app_motor_init();
 
-    /* 9. 振动传感器 */
-    app_vibration_init();
-
     return OPRT_OK;
 }
 
-VOID_T power_off_cb(VOID_T){
-    //停止电机
+STATIC VOID_T run_off_cb(VOID_T)
+{
     app_motor_stop();
-    if(tal_app_server_conn_handle == 0XFFFF){
-        // 蓝牙未连接则进入低功耗
-        // 清除配网标志位
-        tal_flash_erase(APP_DATA_FLASH_ADDR, 0x1000);
-        // 关闭AD_BAT_SWITCH,把AD_BAT_SWITCH配置为输入下拉
-        TUYA_GPIO_BASE_CFG_T gpio_cfg = {
-            .mode   = TUYA_GPIO_PULLDOWN,
-            .direct = TUYA_GPIO_INPUT,
-            .level  = TUYA_GPIO_LEVEL_LOW,
-        };
-        /* 初始化两个 GPIO（不进中断，纯输入轮询） */
-        tal_gpio_init(AD_BAT_SWITCH, &gpio_cfg);
-        TAL_PR_DEBUG("AD_BAT_SWITCH TUYA_GPIO_PULLDOWN");
-        tal_adc_deinit(TUYA_ADC_NUM_0);
-        TAL_PR_DEBUG("INTO LOW POWER");
-        tal_cpu_allow_sleep();
-    }else{
-        // 蓝牙连接保活，不需要操作
-        TAL_PR_DEBUG("ONLY CLOSE MOTOR");
-    }
+    tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_LOW);
+    app_led_update();
 }
 
-VOID_T power_on_cb(VOID_T){
+STATIC VOID_T run_on_cb(VOID_T)
+{
+    if (app_state_is_charging()) {
+        tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_HIGH);
+    }
     app_motor_start();
+    app_led_update();
+}
+
+STATIC VOID_T machine_power_off_cb(VOID_T)
+{
+    app_battery_suspend();
+    app_led_update();
+    TAL_PR_DEBUG("INTO LOW POWER");
+    tal_cpu_allow_sleep();
+}
+
+STATIC VOID_T machine_power_on_cb(VOID_T)
+{
+    app_battery_resume();
+    app_led_update();
 }
 
 OPERATE_RET tuya_init_last(VOID_T)
@@ -511,17 +514,15 @@ OPERATE_RET tuya_init_last(VOID_T)
 
     /* ---- 回调注册 ---- */
 
-    /* 振动 → 互动模式触发 */
-    app_vibration_register_cb(app_motor_interactive_trigger);
-
     /* 设备状态变更 → LED 刷新 */
     app_state_register_change_cb(led_on_state_change);
 
-    /* 电源状态 → 电机启停（统一开关机，与物理按键/蓝牙 DP_SWITCH 一致） */
-    app_state_register_power_cb(power_on_cb, power_off_cb);
+    /* 有效运行状态 -> 电机启停；机身电源 -> 低功耗 */
+    app_state_register_power_cb(run_on_cb, run_off_cb);
+    app_state_register_machine_power_cb(machine_power_on_cb, machine_power_off_cb);
 
     /* 临界低电 → 硬件关机保护 */
-    // app_battery_register_critical_cb(battery_critical_poweroff);
+    app_battery_register_critical_cb(battery_critical_poweroff);
 
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
     // if (tal_oled_init() == OPRT_OK) {
@@ -539,17 +540,7 @@ OPERATE_RET tuya_init_last(VOID_T)
     app_product_test_init();
 #endif // APP_PRODUCT_TEST
 #endif
-    // 初始化结束后从FLASH中读取标志位
-    // 若标志位为0x03则认为是长按3秒后的复位启动，此时不能开机
-    {
-        UINT8_T f_reset = 0xFF;
-        tal_flash_read(APP_DATA_FLASH_ADDR, &f_reset, 1);
-        if (f_reset == 0x03) {
-            TAL_PR_INFO("[boot] factory-reset flag detected, staying off");
-        } else {
-            app_state_set_power(TRUE);
-        }
-    }
+    // app_state_set_power(TRUE);
     
     return OPRT_OK;
 }
@@ -572,4 +563,3 @@ UINT16_T tuya_app_get_conn_handle(VOID_T)
 {
     return tal_app_server_conn_handle;
 }
-

@@ -27,10 +27,10 @@
 #include "tal_sw_timer.h"
 #include "tal_gpio.h"
 #include "tal_system.h"
-#include "tal_flash.h"
 
 #include "tuya_ble_api.h"
 #include "tuya_ble_protocol_callback.h"
+#include "tuya_sdk_callback.h"
 
 #include "app_key.h"
 #include "app_state.h"
@@ -172,25 +172,21 @@ STATIC VOID_T app_key_poll_handler(TIMER_ID timer_id, VOID_T *arg)
                     press_duration = now_ms - s_press_tick_ms;
 
                     if (s_long_press_eligible || press_duration >= KEY_LONG_PRESS_MS) {
-                        /* 长按松开 → 恢复出厂 */
-                        TAL_PR_INFO("[key] long press release (%dms) -> factory reset",
+                        /* 长按松开 -> 进入配对模式 */
+                        TAL_PR_INFO("[key] long press release (%dms) -> pairing",
                                     press_duration);
-                        // tuya_ble_device_unbind();
-                        tuya_ble_device_factory_reset();
-                        tuya_ble_disconnect_and_reset_timer_start();
-                        // 写一个标志位到FLASH：标记本次为长按复位后冷启动
-                        tal_flash_erase(APP_DATA_FLASH_ADDR, 0x1000);
-                        {
-                            UINT8_T f_reset = 0x03;
-                            tal_flash_write(APP_DATA_FLASH_ADDR, &f_reset, 1);
+                        app_state_set_power(TRUE);
+                        if (tuya_app_get_conn_handle() != 0xFFFF) {
+                            tuya_ble_gap_disconnect();
                         }
+                        tuya_ble_device_unbind();
                     } else {
                         /* 开机3s内的短按不做处理（防止唤醒按键被误认为开关机） */
                         if (s_boot_tick_ms != 0 && (now_ms - s_boot_tick_ms) < 3000) {
                             TAL_PR_DEBUG("[key] short press ignored (within 3s of boot)");
                         } else {
-                            /* 短按松开 → 开关机 */
-                            TAL_PR_INFO("[key] short press release (%dms) -> toggle power",
+                            /* 短按松开 -> 机身开关机 */
+                            TAL_PR_INFO("[key] short press release (%dms) -> toggle machine power",
                                         press_duration);
                             app_state_toggle_power();
                         }

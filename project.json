@@ -22,7 +22,6 @@
             "$PROJECT_ROOT/apps/tuyaos_demo_ble_cat_string/src/app_motor.c",
             "$PROJECT_ROOT/apps/tuyaos_demo_ble_cat_string/src/app_product_test.c",
             "$PROJECT_ROOT/apps/tuyaos_demo_ble_cat_string/src/app_state.c",
-            "$PROJECT_ROOT/apps/tuyaos_demo_ble_cat_string/src/app_vibration.c",
             "$PROJECT_ROOT/apps/tuyaos_demo_ble_cat_string/src/tuya_ble_protocol_callback.c",
             "$PROJECT_ROOT/apps/tuyaos_demo_ble_cat_string/src/tuya_sdk_callback.c"
         ],
