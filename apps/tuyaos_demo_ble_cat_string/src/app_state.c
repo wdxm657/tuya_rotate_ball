@@ -26,7 +26,7 @@ STATIC VOID_T (*s_machine_off_cb)(VOID_T) = NULL;
 
 STATIC BOOL_T app_state_should_run(VOID_T)
 {
-    return (s_machine_powered && s_app_powered && !s_low_voltage_lock && s_dev_state == DEV_STATE_WORK);
+    return (s_machine_powered && s_app_powered && !s_low_voltage_lock && s_dev_state != DEV_STATE_SLEEP);
 }
 
 STATIC VOID_T app_state_notify_run_if_needed(VOID_T)
@@ -120,7 +120,7 @@ VOID_T app_state_init(VOID_T)
     s_low_voltage_lock = FALSE;
     s_run_active = FALSE;
     s_dev_state = DEV_STATE_WORK;
-    // app_state_start_work_timer();
+    app_state_start_work_timer();
 
     TAL_PR_INFO("[state] initialized");
 }
@@ -149,8 +149,8 @@ BOOL_T app_state_set_power(BOOL_T on)
         if (s_machine_on_cb != NULL) {
             s_machine_on_cb();
         }
-        // app_state_set(DEV_STATE_WORK);
-        // app_state_start_work_timer();
+        app_state_set(DEV_STATE_WORK);
+        app_state_start_work_timer();
     } else {
         app_state_stop_cycle_timers();
         app_state_notify_run_if_needed();
@@ -200,6 +200,7 @@ BOOL_T app_state_is_powered_on(VOID_T)
 
 VOID_T app_state_set_charging(BOOL_T charging)
 {
+    app_state_set(DEV_STATE_CHARGING);
     s_charging = charging;
 }
 
@@ -210,6 +211,7 @@ BOOL_T app_state_is_charging(VOID_T)
 
 VOID_T app_state_set_charge_done(BOOL_T done)
 {
+    app_state_set(DEV_STATE_CHARGE_DONE);
     s_charge_done = done;
 }
 

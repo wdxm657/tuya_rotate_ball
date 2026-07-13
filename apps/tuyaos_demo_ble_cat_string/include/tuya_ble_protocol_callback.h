@@ -26,7 +26,7 @@ extern "C" {
 // #define TY_DEVICE_PID         "3aubjk7p" //oem no use
 #define TY_DEVICE_PID         "ytaqgucz"
 
-#define SWITCH_TY 1
+#define SWITCH_TY 2
 
 #if(SWITCH_TY==0)
 #define TY_DEVICE_MAC         "DC234DAFCC96"

@@ -427,7 +427,7 @@ OPERATE_RET tuya_init_third(VOID_T)
     TUYA_WAKEUP_SOURCE_BASE_CFG_T usb_wakeup_cfg = {
         .source = TUYA_WAKEUP_SOURCE_GPIO,
         .wakeup_para.gpio_param.gpio_num = USB_DET,
-        .wakeup_para.gpio_param.level = TUYA_GPIO_LEVEL_HIGH,
+        .wakeup_para.gpio_param.level = TUYA_GPIO_LEVEL_LOW,
     };
     tkl_wakeup_source_set(&usb_wakeup_cfg);
 
@@ -512,7 +512,7 @@ OPERATE_RET tuya_init_last(VOID_T)
     app_state_register_machine_power_cb(machine_power_on_cb, machine_power_off_cb);
 
     /* 临界低电 -> 硬件关机保护 */
-    // app_battery_register_critical_cb(battery_critical_poweroff);
+    app_battery_register_critical_cb(battery_critical_poweroff);
 
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
     // if (tal_oled_init() == OPRT_OK) {
@@ -530,7 +530,7 @@ OPERATE_RET tuya_init_last(VOID_T)
     app_product_test_init();
 #endif // APP_PRODUCT_TEST
 #endif
-    // app_state_set_power(TRUE);
+    app_state_set_power(TRUE);
     
     return OPRT_OK;
 }

@@ -19,13 +19,24 @@ extern "C" {
 
 #define MOTOR_PWM_CH_FOR        MOTOR_FOR
 #define MOTOR_PWM_CH_REV        MOTOR_REV
-#define MOTOR_PWM_FREQ_HZ       1000
+#define MOTOR_PWM_FREQ_HZ       100
 
+/* tal_pwm_duty_set() on TLSR825x uses 0~1000000, independent of cfg.cycle. */
 #define MOTOR_PWM_DUTY_100      1000000U
+#define MOTOR_PWM_DUTY_95       950000U
+#define MOTOR_PWM_DUTY_90       900000U
+#define MOTOR_PWM_DUTY_85       850000U
 #define MOTOR_PWM_DUTY_80       800000U
+#define MOTOR_PWM_DUTY_75       750000U
+#define MOTOR_PWM_DUTY_70       700000U
 #define MOTOR_PWM_DUTY_65       650000U
+#define MOTOR_PWM_DUTY_60       600000U
+#define MOTOR_PWM_DUTY_55       550000U
 #define MOTOR_PWM_DUTY_50       500000U
+#define MOTOR_PWM_DUTY_40       400000U
 #define MOTOR_PWM_DUTY_35       350000U
+#define MOTOR_PWM_DUTY_30       300000U
+#define MOTOR_PWM_DUTY_20       200000U
 #define MOTOR_PWM_DUTY_0        0U
 
 typedef enum {
@@ -40,12 +51,6 @@ typedef enum {
     WORK_MODE_FIXED   = 0,
     WORK_MODE_VARIABLE = 1,
 } work_mode_t;
-
-typedef struct {
-    UINT8_T direction;
-    UINT16_T duration_ms;
-    speed_dp_t speed_dp;
-} motor_step_t;
 
 VOID_T app_motor_init(VOID_T);
 VOID_T app_motor_set_mode(work_mode_t mode);

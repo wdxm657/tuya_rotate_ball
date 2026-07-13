@@ -181,14 +181,14 @@ STATIC VOID_T app_key_poll_handler(TIMER_ID timer_id, VOID_T *arg)
                         }
                         tuya_ble_device_unbind();
                     } else {
-                        /* 开机3s内的短按不做处理（防止唤醒按键被误认为开关机） */
+                        /* 开机3s内的短按不做处理（防止唤醒按键被误认为进入低功耗） */
                         if (s_boot_tick_ms != 0 && (now_ms - s_boot_tick_ms) < 3000) {
                             TAL_PR_DEBUG("[key] short press ignored (within 3s of boot)");
                         } else {
-                            /* 短按松开 -> 机身开关机 */
+                            /* 短按松开 -> 进入低功耗 */
                             TAL_PR_INFO("[key] short press release (%dms) -> toggle machine power",
                                         press_duration);
-                            app_state_toggle_power();
+                            app_state_set_power(FALSE);
                         }
                     }
 
