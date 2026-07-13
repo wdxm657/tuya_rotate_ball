@@ -511,7 +511,7 @@ OPERATE_RET tuya_init_last(VOID_T)
     app_state_register_power_cb(run_on_cb, run_off_cb);
     app_state_register_machine_power_cb(machine_power_on_cb, machine_power_off_cb);
 
-    /* 临界低电 → 硬件关机保护 暂时关闭*/
+    /* 临界低电 -> 硬件关机保护 */
     // app_battery_register_critical_cb(battery_critical_poweroff);
 
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)

@@ -40,19 +40,18 @@ STATIC VOID_T app_led_apply(VOID_T)
 {
     switch (s_status_mode) {
     case LED_MODE_BLUE_SOLID:
-        TAL_PR_INFO("LED_MODE_BLUE_SOLID");
         app_led_write(LED_B, TRUE);
+        app_led_write(LED_G, FALSE);
         break;
     case LED_MODE_BLUE_BLINK:
-        TAL_PR_INFO("LED_MODE_BLUE_BLINK");
         app_led_write(LED_B, s_blink_on);
+        app_led_write(LED_G, FALSE);
         break;
     case LED_MODE_GREEN_BLINK:
-        TAL_PR_INFO("LED_MODE_GREEN_BLINK");
+        app_led_write(LED_B, FALSE);
         app_led_write(LED_G, s_blink_on);
         break;
     default:
-        TAL_PR_INFO("LED_MODE_RED_BLINK");
         app_led_write(LED_B, FALSE);
         app_led_write(LED_G, FALSE);
         break;
@@ -60,19 +59,18 @@ STATIC VOID_T app_led_apply(VOID_T)
 
     switch (s_power_mode) {
     case LED_MODE_RED_BLINK:
-        TAL_PR_INFO("CHARGE LED_MODE_RED_BLINK");
         app_led_write(CHARGE_R, s_blink_on);
+        app_led_write(CHARGE_G, FALSE);
         break;
     case LED_MODE_RED_SOLID:
-        TAL_PR_INFO("CHARGE LED_MODE_RED_SOLID");
         app_led_write(CHARGE_R, TRUE);
+        app_led_write(CHARGE_G, FALSE);
         break;
     case LED_MODE_CHARGE_GREEN_SOLID:
-        TAL_PR_INFO("CHARGE LED_MODE_CHARGE_GREEN_SOLID");
+        app_led_write(CHARGE_R, FALSE);
         app_led_write(CHARGE_G, TRUE);
         break;
     default:
-        TAL_PR_INFO("CHARGE LED_MODE_OFF");
         app_led_write(CHARGE_R, FALSE);
         app_led_write(CHARGE_G, FALSE);
         break;

@@ -16,8 +16,11 @@ extern "C" {
 #define SLEEP_PERIOD_MS     (1 * 60 * 1000UL)
 
 typedef enum {
-    DEV_STATE_WORK  = 0,
-    DEV_STATE_SLEEP = 1,
+    DEV_STATE_WORK        = 0,
+    DEV_STATE_STANDBY     = 1,
+    DEV_STATE_CHARGING    = 2,
+    DEV_STATE_CHARGE_DONE = 3,
+    DEV_STATE_SLEEP       = DEV_STATE_STANDBY,
 } dev_state_t;
 
 VOID_T app_state_init(VOID_T);

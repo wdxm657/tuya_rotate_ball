@@ -120,7 +120,7 @@ VOID_T app_state_init(VOID_T)
     s_low_voltage_lock = FALSE;
     s_run_active = FALSE;
     s_dev_state = DEV_STATE_WORK;
-    app_state_start_work_timer();
+    // app_state_start_work_timer();
 
     TAL_PR_INFO("[state] initialized");
 }
@@ -149,8 +149,8 @@ BOOL_T app_state_set_power(BOOL_T on)
         if (s_machine_on_cb != NULL) {
             s_machine_on_cb();
         }
-        app_state_set(DEV_STATE_WORK);
-        app_state_start_work_timer();
+        // app_state_set(DEV_STATE_WORK);
+        // app_state_start_work_timer();
     } else {
         app_state_stop_cycle_timers();
         app_state_notify_run_if_needed();
@@ -255,7 +255,16 @@ VOID_T app_state_process(VOID_T)
 
 UINT8_T app_state_get_dp_enum(VOID_T)
 {
-    return app_state_should_run() ? (UINT8_T)DEV_STATE_WORK : (UINT8_T)DEV_STATE_SLEEP;
+    if (s_charge_done || s_charging)
+    {
+        if (s_charge_done) {
+            return (UINT8_T)DEV_STATE_CHARGE_DONE;
+        }
+        if (s_charging) {
+            return (UINT8_T)DEV_STATE_CHARGING;
+        }
+    }
+    return app_state_should_run() ? (UINT8_T)DEV_STATE_WORK : (UINT8_T)DEV_STATE_STANDBY;
 }
 
 VOID_T app_state_register_change_cb(VOID_T (*cb)(dev_state_t, dev_state_t))
