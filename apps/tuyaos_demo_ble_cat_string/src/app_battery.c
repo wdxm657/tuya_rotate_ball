@@ -176,7 +176,7 @@ STATIC OPERATE_RET app_battery_sample(INT32_T *vol_mv)
 }
 
 /**
- * @brief 监测定时器回调 — 每 2 秒执行一次
+ * @brief 监测定时器回调 — 每 1 秒执行一次
  *
  * 1. 采样电压
  * 2. 更新缓存
@@ -187,6 +187,8 @@ STATIC VOID_T app_battery_monitor_handler(TIMER_ID timer_id, VOID_T *arg)
 {
     INT32_T vol_mv = 0;
     UINT8_T percent;
+    UINT8_T filtered_percent;
+    BOOL_T charging_or_full;
 
     /* 采样 */
     if (app_battery_sample(&vol_mv) != OPRT_OK) {
@@ -195,31 +197,40 @@ STATIC VOID_T app_battery_monitor_handler(TIMER_ID timer_id, VOID_T *arg)
 
     /* 换算百分比 */
     percent = app_battery_voltage_to_percent(vol_mv);
+    filtered_percent = percent;
+    charging_or_full = (app_state_is_charging() || app_state_is_charge_done());
+
+    if (charging_or_full && filtered_percent < s_cached_percent) {
+        filtered_percent = s_cached_percent;
+    } else if (!charging_or_full && filtered_percent > s_cached_percent) {
+        filtered_percent = s_cached_percent;
+    }
 
     /* 更新缓存 */
     s_cached_voltage = vol_mv;
-    if (s_cached_percent != percent) {
-        TAL_PR_INFO("[battery] sample: %dmV → %d%%", vol_mv, percent);
+    if (s_cached_percent != filtered_percent) {
+        TAL_PR_INFO("[battery] sample: %dmV -> %d%% (raw=%d%%, charge=%d)",
+                    vol_mv, filtered_percent, percent, app_state_is_charging());
     }
     
-    s_cached_percent = percent;
+    s_cached_percent = filtered_percent;
 
 
     /* ----- 低电量检测 ----- */
-    if (percent <= BATTERY_LOW_THRESHOLD) {
+    if (s_cached_percent <= BATTERY_LOW_THRESHOLD) {
         if (!s_battery_low) {
             s_battery_low = TRUE;
-            TAL_PR_WARN("[battery] LOW: %d%%", percent);
+            TAL_PR_WARN("[battery] LOW: %d%%", s_cached_percent);
         }
     } else {
         s_battery_low = FALSE;
     }
 
     /* ----- 临界低电保护 ----- */
-    if (percent <= BATTERY_CRITICAL_THRESHOLD) {
+    if (s_cached_percent <= BATTERY_CRITICAL_THRESHOLD) {
         if (!s_battery_critical) {
             s_battery_critical = TRUE;
-            TAL_PR_ERR("[battery] CRITICAL: %d%% — entering deep sleep!", percent);
+            TAL_PR_ERR("[battery] CRITICAL: %d%% — entering deep sleep!", s_cached_percent);
         }
 
         if (!app_state_is_charging() && s_critical_cb != NULL) {
@@ -280,7 +291,7 @@ OPERATE_RET app_battery_init(VOID_T)
         TAL_PR_WARN("[battery] init sample failed, use defaults");
     }
 
-    /* ---------- 创建监测定时器（0.5 秒周期） ---------- */
+    /* ---------- 创建监测定时器（ BATTERY_MONITOR_INTERVAL_MS 周期） ---------- */
     if (s_monitor_timer_id == NULL) {
         tal_sw_timer_create(app_battery_monitor_handler, NULL, &s_monitor_timer_id);
     }

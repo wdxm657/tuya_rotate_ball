@@ -131,7 +131,7 @@ STATIC VOID_T battery_critical_poweroff(VOID_T)
 /* DP定时上报：读取缓存值，仅上报有变更的DP */
 STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
 {
-    app_led_update();
+    // app_led_update();
 
     if(tal_app_server_conn_handle == 0XFFFF){
         return;
@@ -435,27 +435,19 @@ OPERATE_RET tuya_init_third(VOID_T)
     /* 1. 状态机（须在其他模块之前初始化） */
     app_state_init();
 
-    /* 2. 初始化 GPIO 外设引脚 */
-    TUYA_GPIO_BASE_CFG_T gpio_out_high = {
-        .mode   = TUYA_GPIO_PUSH_PULL,
-        .direct = TUYA_GPIO_OUTPUT,
-        .level  = TUYA_GPIO_LEVEL_LOW,
-    };
-    tal_gpio_init(AD_Bat_CON, &gpio_out_high);
-
-    /* 3. 按键（一直运行） */
+    /* 2. 按键（一直运行） */
     app_key_init();
 
-    /* 4. LED 指示灯 */
+    /* 3. LED 指示灯 */
     app_led_init();
 
-    /* 5. 电池监测（ADC+定时器） */
+    /* 4. 电池监测（ADC+定时器） */
     app_battery_init();
 
-    /* 6. 充电检测（GPIO轮询） */
+    /* 5. 充电检测（GPIO轮询） */
     app_charge_init();
 
-    /* 7. 电机 (PWM 初始化) */
+    /* 6. 电机 (PWM 初始化) */
     app_motor_init();
 
     return OPRT_OK;

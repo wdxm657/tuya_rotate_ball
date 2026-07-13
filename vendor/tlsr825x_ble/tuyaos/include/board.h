@@ -101,9 +101,9 @@ extern unsigned int ota_program_offset;
 
 #define CHARGE_G        TUYA_GPIO_NUM_27 // D3 充电指示灯 绿色
 #define CHARGE_R        TUYA_GPIO_NUM_31 // D7 充电指示灯 红色
-#define USB_DET         TUYA_GPIO_NUM_14 // B6 USB插入检测（高电平=USB插入）
-#define LED_B           TUYA_GPIO_NUM_0  // A0 状态指示灯 蓝色
-#define LED_G           TUYA_GPIO_NUM_1  // A1 状态指示灯 绿色
+#define USB_DET         TUYA_GPIO_NUM_14 // B6 USB插入检测（低电平=USB插入）
+#define LED_B           TUYA_GPIO_NUM_1  // A0 状态指示灯 蓝色
+#define LED_G           TUYA_GPIO_NUM_0  // A1 状态指示灯 绿色
 #define AD_Bat_CON      TUYA_GPIO_NUM_26 // D2 电量ADC控制开关 高电平开 低电平关
 // 以下两个在调试阶段暂时禁用
 // #define Set_Charg_I     TUYA_GPIO_NUM_9  // B1 充电电流限流开关 充电中且当电机运行时打拉高，电机停止时拉低

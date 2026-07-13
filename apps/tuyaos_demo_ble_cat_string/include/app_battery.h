@@ -33,7 +33,7 @@ extern "C" {
 
 /* ---------- ADC 参数 ---------- */
 #define BATTERY_ADC_CH              AD_Bat  /**< 电池 ADC 通道号 */
-#define BATTERY_DIVIDER_RATIO       2       /**< 硬件分压比 */
+#define BATTERY_DIVIDER_RATIO       4.3     /**< 硬件分压比 130K/30K */
 
 /* ---------- 采样滤波 ---------- */
 #define BATTERY_ADC_SAMPLES         8       /**< 每次读取的 ADC 次数（均值滤波） */

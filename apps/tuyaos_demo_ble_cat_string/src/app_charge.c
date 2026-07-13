@@ -25,11 +25,11 @@ STATIC charge_state_t s_charge_state = CHG_STATE_NO_USB;
 
 STATIC BOOL_T app_charge_read_usb(VOID_T)
 {
-    TUYA_GPIO_LEVEL_E level = TUYA_GPIO_LEVEL_LOW;
+    TUYA_GPIO_LEVEL_E level = TUYA_GPIO_LEVEL_HIGH;
     if (tal_gpio_read(USB_DET, &level) != OPRT_OK) {
         return FALSE;
     }
-    return level == TUYA_GPIO_LEVEL_HIGH;
+    return level == TUYA_GPIO_LEVEL_LOW;
 }
 
 STATIC BOOL_T app_charge_read_active(VOID_T)

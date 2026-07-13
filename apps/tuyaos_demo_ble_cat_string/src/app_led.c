@@ -11,6 +11,7 @@
 #include "app_led.h"
 #include "app_state.h"
 #include "app_battery.h"
+#include "tal_log.h"
 
 #define LED_BLINK_PERIOD_MS 250
 
@@ -21,7 +22,7 @@ STATIC BOOL_T s_blink_on = FALSE;
 
 STATIC VOID_T app_led_write(TUYA_GPIO_NUM_E pin, BOOL_T on)
 {
-    tal_gpio_write(pin, on ? TUYA_GPIO_LEVEL_LOW : TUYA_GPIO_LEVEL_HIGH);
+    tal_gpio_write(pin, on);
 }
 
 STATIC BOOL_T app_led_is_pairing(VOID_T)
@@ -37,36 +38,43 @@ STATIC BOOL_T app_led_mode_blinks(led_mode_t mode)
 
 STATIC VOID_T app_led_apply(VOID_T)
 {
-    app_led_write(LED_B, FALSE);
-    app_led_write(LED_G, FALSE);
-    app_led_write(CHARGE_R, FALSE);
-    app_led_write(CHARGE_G, FALSE);
-
     switch (s_status_mode) {
     case LED_MODE_BLUE_SOLID:
+        TAL_PR_INFO("LED_MODE_BLUE_SOLID");
         app_led_write(LED_B, TRUE);
         break;
     case LED_MODE_BLUE_BLINK:
+        TAL_PR_INFO("LED_MODE_BLUE_BLINK");
         app_led_write(LED_B, s_blink_on);
         break;
     case LED_MODE_GREEN_BLINK:
+        TAL_PR_INFO("LED_MODE_GREEN_BLINK");
         app_led_write(LED_G, s_blink_on);
         break;
     default:
+        TAL_PR_INFO("LED_MODE_RED_BLINK");
+        app_led_write(LED_B, FALSE);
+        app_led_write(LED_G, FALSE);
         break;
     }
 
     switch (s_power_mode) {
     case LED_MODE_RED_BLINK:
+        TAL_PR_INFO("CHARGE LED_MODE_RED_BLINK");
         app_led_write(CHARGE_R, s_blink_on);
         break;
     case LED_MODE_RED_SOLID:
+        TAL_PR_INFO("CHARGE LED_MODE_RED_SOLID");
         app_led_write(CHARGE_R, TRUE);
         break;
     case LED_MODE_CHARGE_GREEN_SOLID:
+        TAL_PR_INFO("CHARGE LED_MODE_CHARGE_GREEN_SOLID");
         app_led_write(CHARGE_G, TRUE);
         break;
     default:
+        TAL_PR_INFO("CHARGE LED_MODE_OFF");
+        app_led_write(CHARGE_R, FALSE);
+        app_led_write(CHARGE_G, FALSE);
         break;
     }
 }
@@ -97,7 +105,7 @@ VOID_T app_led_init(VOID_T)
     TUYA_GPIO_BASE_CFG_T gpio_cfg = {
         .mode = TUYA_GPIO_PUSH_PULL,
         .direct = TUYA_GPIO_OUTPUT,
-        .level = TUYA_GPIO_LEVEL_HIGH,
+        .level = TUYA_GPIO_LEVEL_LOW,
     };
 
     tal_gpio_init(LED_B, &gpio_cfg);
@@ -131,6 +139,8 @@ VOID_T app_led_update(VOID_T)
             status_mode = LED_MODE_BLUE_SOLID;
         } else if (app_state_get() == DEV_STATE_WORK) {
             status_mode = LED_MODE_GREEN_BLINK;
+        }else{
+            status_mode = LED_MODE_OFF;
         }
 
         if (app_state_is_charging()) {
@@ -139,6 +149,8 @@ VOID_T app_led_update(VOID_T)
             power_mode = LED_MODE_CHARGE_GREEN_SOLID;
         } else if (app_state_is_low_voltage_locked() || app_battery_is_low()) {
             power_mode = LED_MODE_RED_BLINK;
+        }else{
+            power_mode = LED_MODE_OFF;
         }
     }
 
