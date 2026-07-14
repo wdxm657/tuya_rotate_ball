@@ -99,8 +99,8 @@ extern unsigned int ota_program_offset;
 #endif
 
 
-#define CHARGE_G        TUYA_GPIO_NUM_27 // D3 充电指示灯 绿色
-#define CHARGE_R        TUYA_GPIO_NUM_31 // D7 充电指示灯 红色
+#define CHARGE_G        TUYA_GPIO_NUM_31 // D3 充电指示灯 绿色
+#define CHARGE_R        TUYA_GPIO_NUM_27 // D7 充电指示灯 红色
 #define USB_DET         TUYA_GPIO_NUM_14 // B6 USB插入检测（低电平=USB插入）
 #define LED_B           TUYA_GPIO_NUM_1  // A0 状态指示灯 蓝色
 #define LED_G           TUYA_GPIO_NUM_0  // A1 状态指示灯 绿色

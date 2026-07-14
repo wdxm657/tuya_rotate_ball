@@ -28,7 +28,7 @@ STATIC VOID_T app_led_write(TUYA_GPIO_NUM_E pin, BOOL_T on)
 STATIC BOOL_T app_led_is_pairing(VOID_T)
 {
     tuya_ble_connect_status_t st = tuya_ble_connect_status_get();
-    return !(st == BONDING_CONN || st == BONDING_UNCONN);
+    return (st == BONDING_CONN || st == BONDING_UNCONN);
 }
 
 STATIC BOOL_T app_led_mode_blinks(led_mode_t mode)
@@ -133,9 +133,9 @@ VOID_T app_led_update(VOID_T)
     if (app_state_is_machine_powered_on()) {
         if (!app_state_is_app_power_on()) {
             status_mode = LED_MODE_BLUE_BLINK;
-        } else if (app_led_is_pairing()) {
+        } else if (!app_led_is_pairing()) {
             status_mode = LED_MODE_BLUE_SOLID;
-        } else if (app_state_get() == DEV_STATE_WORK) {
+        } else if (app_state_get() != DEV_STATE_SLEEP) {
             status_mode = LED_MODE_GREEN_BLINK;
         }else{
             status_mode = LED_MODE_OFF;

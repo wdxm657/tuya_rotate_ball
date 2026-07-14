@@ -530,7 +530,7 @@ OPERATE_RET tuya_init_last(VOID_T)
     app_product_test_init();
 #endif // APP_PRODUCT_TEST
 #endif
-    app_state_set_power(TRUE);
+    app_led_update();
     
     return OPRT_OK;
 }

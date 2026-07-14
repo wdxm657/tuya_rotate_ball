@@ -22,22 +22,9 @@ extern "C" {
 #define MOTOR_PWM_FREQ_HZ       100
 
 /* tal_pwm_duty_set() on TLSR825x uses 0~1000000, independent of cfg.cycle. */
-#define MOTOR_PWM_DUTY_100      1000000U
-#define MOTOR_PWM_DUTY_95       950000U
-#define MOTOR_PWM_DUTY_90       900000U
-#define MOTOR_PWM_DUTY_85       850000U
-#define MOTOR_PWM_DUTY_80       800000U
-#define MOTOR_PWM_DUTY_75       750000U
-#define MOTOR_PWM_DUTY_70       700000U
-#define MOTOR_PWM_DUTY_65       650000U
-#define MOTOR_PWM_DUTY_60       600000U
-#define MOTOR_PWM_DUTY_55       550000U
-#define MOTOR_PWM_DUTY_50       500000U
-#define MOTOR_PWM_DUTY_40       400000U
-#define MOTOR_PWM_DUTY_35       350000U
-#define MOTOR_PWM_DUTY_30       300000U
-#define MOTOR_PWM_DUTY_20       200000U
 #define MOTOR_PWM_DUTY_0        0U
+#define MOTOR_PWM_DUTY_1        10000U
+#define MOTOR_PWM_DUTY_100      (MOTOR_PWM_DUTY_1 * 10000)
 
 typedef enum {
     SPEED_DP_55 = 0,

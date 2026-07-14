@@ -200,7 +200,10 @@ BOOL_T app_state_is_powered_on(VOID_T)
 
 VOID_T app_state_set_charging(BOOL_T charging)
 {
-    app_state_set(DEV_STATE_CHARGING);
+    if (charging)
+    {
+        app_state_set(DEV_STATE_CHARGING);
+    }
     s_charging = charging;
 }
 
@@ -211,7 +214,10 @@ BOOL_T app_state_is_charging(VOID_T)
 
 VOID_T app_state_set_charge_done(BOOL_T done)
 {
-    app_state_set(DEV_STATE_CHARGE_DONE);
+    if (done)
+    {
+        app_state_set(DEV_STATE_CHARGE_DONE);
+    }
     s_charge_done = done;
 }
 
@@ -257,16 +263,22 @@ VOID_T app_state_process(VOID_T)
 
 UINT8_T app_state_get_dp_enum(VOID_T)
 {
-    if (s_charge_done || s_charging)
+    if (s_app_powered)
     {
-        if (s_charge_done) {
-            return (UINT8_T)DEV_STATE_CHARGE_DONE;
-        }
-        if (s_charging) {
-            return (UINT8_T)DEV_STATE_CHARGING;
-        }
+        return app_state_should_run() ? (UINT8_T)DEV_STATE_WORK : (UINT8_T)DEV_STATE_STANDBY;
     }
-    return app_state_should_run() ? (UINT8_T)DEV_STATE_WORK : (UINT8_T)DEV_STATE_STANDBY;
+    else{
+        if (s_charge_done || s_charging)
+        {
+            if (s_charge_done) {
+                return (UINT8_T)DEV_STATE_CHARGE_DONE;
+            }
+            if (s_charging) {
+                return (UINT8_T)DEV_STATE_CHARGING;
+            }
+        }
+        return app_state_should_run() ? (UINT8_T)DEV_STATE_WORK : (UINT8_T)DEV_STATE_STANDBY;
+    }    
 }
 
 VOID_T app_state_register_change_cb(VOID_T (*cb)(dev_state_t, dev_state_t))

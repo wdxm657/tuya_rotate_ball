@@ -24,6 +24,7 @@ STATIC UINT8_T s_seq_index = 0;
 STATIC UINT8_T s_var_seq_cycle_count = 0;
 STATIC UINT8_T s_var_rand_dir = MOTOR_DIR_FORWARD;
 STATIC UINT8_T s_var_rand_seed = 0;
+STATIC speed_dp_t s_var_rand_speed = SPEED_DP_55;
 
 typedef enum
 {
@@ -34,11 +35,11 @@ typedef enum
 STATIC var_substate_t s_var_substate = VAR_SUB_SEQ;
 
 STATIC const UINT32_T s_level_duty[5] = {
-    MOTOR_PWM_DUTY_55,
-    MOTOR_PWM_DUTY_60,
-    MOTOR_PWM_DUTY_65,
-    MOTOR_PWM_DUTY_70,
-    MOTOR_PWM_DUTY_75,
+    MOTOR_PWM_DUTY_1 * 50,
+    MOTOR_PWM_DUTY_1 * 55,
+    MOTOR_PWM_DUTY_1 * 60,
+    MOTOR_PWM_DUTY_1 * 65,
+    MOTOR_PWM_DUTY_1 * 70,
 };
 
 /** 单步：方向 + 持续时间（毫秒）。调试时序只改 s_sm_slow_fast_seq[]。 */
@@ -143,7 +144,7 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
     {
         /* s_variable_seq 循环 5 次 */
         const sm_simple_seq_step_t *step = &s_variable_seq[s_seq_index];
-        app_motor_set_direction(step->dir, s_speed_dp);
+        app_motor_set_direction(step->dir, SPEED_DP_57);
         s_seq_index++;
         if (s_seq_index >= VARIABLE_SEQ_STEPS)
         {
@@ -156,7 +157,9 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
                 s_var_seq_cycle_count = 0;
                 s_var_rand_seed = (s_var_rand_seed * 13U + 7U) & 0xFFU;
                 s_var_rand_dir = (s_var_rand_seed & 1U) ? MOTOR_DIR_FORWARD : MOTOR_DIR_REVERSE;
-                app_motor_set_direction(s_var_rand_dir, s_speed_dp);
+                s_var_rand_seed = (s_var_rand_seed * 13U + 7U) & 0xFFU;
+                s_var_rand_speed = (speed_dp_t)(SPEED_DP_56 + (s_var_rand_seed % 3U));
+                app_motor_set_direction(s_var_rand_dir, s_var_rand_speed);
                 tal_sw_timer_start(s_motor_timer_id, RANDOM_BURST_MS, TAL_TIMER_ONCE);
                 return;
             }
@@ -169,7 +172,7 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
         s_var_substate = VAR_SUB_SEQ;
         s_seq_index = 0;
         const sm_simple_seq_step_t *step = &s_variable_seq[0];
-        app_motor_set_direction(step->dir, s_speed_dp);
+        app_motor_set_direction(step->dir, SPEED_DP_57);
         s_seq_index = 1;
         tal_sw_timer_start(s_motor_timer_id, step->duration_ms, TAL_TIMER_ONCE);
     }
