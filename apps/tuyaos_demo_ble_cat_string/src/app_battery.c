@@ -44,6 +44,12 @@ STATIC UINT8_T  s_cached_percent = 50;    /**< 最近一次有效百分比 % */
 STATIC BOOL_T   s_battery_low      = FALSE;
 STATIC BOOL_T   s_battery_critical = FALSE;
 
+/* 变化速率预算：0.1% 单位，最大 10 (即 1%) */
+#define PCT_BUDGET_MAX      10
+#define PCT_BUDGET_PER_TICK 1       /* 每 tick (1s) 增加 0.1% */
+
+STATIC UINT8_T s_pct_budget = PCT_BUDGET_MAX;
+
 /* 临界低电回调（由 tuya_sdk_callback 注册） */
 STATIC VOID_T (*s_critical_cb)(VOID_T) = NULL;
 
@@ -200,10 +206,42 @@ STATIC VOID_T app_battery_monitor_handler(TIMER_ID timer_id, VOID_T *arg)
     filtered_percent = percent;
     charging_or_full = (app_state_is_charging() || app_state_is_charge_done());
 
+    /* 方向约束：充电不下滑，放电不虚高 */
     if (charging_or_full && filtered_percent < s_cached_percent) {
         filtered_percent = s_cached_percent;
     } else if (!charging_or_full && filtered_percent > s_cached_percent) {
         filtered_percent = s_cached_percent;
+    }
+
+    /* 变化速率约束：最多每 10 秒变化 1%（0.1%/tick, timer=1000ms） */
+    if (s_pct_budget < PCT_BUDGET_MAX) {
+        s_pct_budget += PCT_BUDGET_PER_TICK;
+    }
+
+    if (filtered_percent > s_cached_percent) {
+        /* 上升：限制爬升速率 — 只消耗实际变化量 */
+        UINT8_T diff = filtered_percent - s_cached_percent;
+        UINT8_T allowed = s_pct_budget / 10;
+        UINT8_T actual = (diff > allowed) ? allowed : diff;
+        filtered_percent = s_cached_percent + actual;
+        UINT32_T used = (UINT32_T)actual * 10U;
+        if (used >= s_pct_budget) {
+            s_pct_budget = 0;
+        } else {
+            s_pct_budget -= (UINT8_T)used;
+        }
+    } else if (filtered_percent < s_cached_percent) {
+        /* 下降：限制跌落速率 — 只消耗实际变化量 */
+        UINT8_T diff = s_cached_percent - filtered_percent;
+        UINT8_T allowed = s_pct_budget / 10;
+        UINT8_T actual = (diff > allowed) ? allowed : diff;
+        filtered_percent = s_cached_percent - actual;
+        UINT32_T used = (UINT32_T)actual * 10U;
+        if (used >= s_pct_budget) {
+            s_pct_budget = 0;
+        } else {
+            s_pct_budget -= (UINT8_T)used;
+        }
     }
 
     /* 更新缓存 */
@@ -286,7 +324,8 @@ OPERATE_RET app_battery_init(VOID_T)
     if (app_battery_sample(&init_mv) == OPRT_OK) {
         s_cached_voltage = init_mv;
         s_cached_percent = app_battery_voltage_to_percent(init_mv);
-        TAL_PR_INFO("[battery] init: %dmV, %d%%", init_mv, s_cached_percent);
+        s_pct_budget = PCT_BUDGET_MAX;
+    TAL_PR_INFO("[battery] init: %dmV, %d%%", init_mv, s_cached_percent);
     } else {
         TAL_PR_WARN("[battery] init sample failed, use defaults");
     }
