@@ -9,11 +9,18 @@
 
 #include "board.h"
 #include "app_motor.h"
+#include "app_battery.h"
+#include "app_charge.h"
 
 #define VARIABLE_SEQ_STEPS 3
 #define FIXED_SEQ_STEPS (sizeof(s_fixed_seq) / sizeof(s_fixed_seq[0]))
 #define VARIABLE_SEQ_CYCLES 5
 #define RANDOM_BURST_MS 3000
+
+/* 电池电压补偿参数（mV） */
+#define BATTERY_VOLTAGE_MIN     3300
+#define BATTERY_VOLTAGE_MAX     4200
+#define DUTY_BOOST_MAX          30      /* N 最大增加值 */
 
 STATIC work_mode_t s_work_mode = WORK_MODE_FIXED;
 STATIC speed_dp_t s_speed_dp = SPEED_DP_55;
@@ -22,9 +29,10 @@ STATIC BOOL_T s_motor_running = FALSE;
 STATIC TIMER_ID s_motor_timer_id = NULL;
 STATIC UINT8_T s_seq_index = 0;
 STATIC UINT8_T s_var_seq_cycle_count = 0;
-STATIC UINT8_T s_var_rand_dir = MOTOR_DIR_FORWARD;
+#define BURST_SEQ_SIZE 20
+
 STATIC UINT8_T s_var_rand_seed = 0;
-STATIC speed_dp_t s_var_rand_speed = SPEED_DP_55;
+STATIC UINT8_T s_var_burst_idx = 0;
 
 typedef enum
 {
@@ -74,13 +82,45 @@ STATIC const sm_simple_seq_step_t s_fixed_seq[] = {
 };
 
 STATIC const sm_simple_seq_step_t s_variable_seq[VARIABLE_SEQ_STEPS] = {
-    {MOTOR_DIR_FORWARD, 100},
-    {MOTOR_DIR_REVERSE, 100},
+    {MOTOR_DIR_FORWARD, 250},
+    {MOTOR_DIR_REVERSE, 250},
     {MOTOR_DIR_STOP, 100},
+};
+
+/* 随机爆发序列 — 方向与挡位预编排，避免连续同方向 */
+typedef struct
+{
+    UINT8_T dir;
+    speed_dp_t speed;
+} motor_burst_step_t;
+
+STATIC const motor_burst_step_t s_rand_burst_seq[BURST_SEQ_SIZE] = {
+    {MOTOR_DIR_FORWARD,  SPEED_DP_58},
+    {MOTOR_DIR_FORWARD,  SPEED_DP_57},
+    {MOTOR_DIR_REVERSE,  SPEED_DP_56},
+    {MOTOR_DIR_REVERSE,  SPEED_DP_58},
+    {MOTOR_DIR_FORWARD,  SPEED_DP_57},
+    {MOTOR_DIR_REVERSE,  SPEED_DP_56},
+    {MOTOR_DIR_FORWARD,  SPEED_DP_58},
+    {MOTOR_DIR_REVERSE,  SPEED_DP_57},
+    {MOTOR_DIR_REVERSE,  SPEED_DP_56},
+    {MOTOR_DIR_REVERSE,  SPEED_DP_58},
+    {MOTOR_DIR_FORWARD,  SPEED_DP_57},
+    {MOTOR_DIR_FORWARD,  SPEED_DP_56},
+    {MOTOR_DIR_FORWARD,  SPEED_DP_58},
+    {MOTOR_DIR_REVERSE,  SPEED_DP_57},
+    {MOTOR_DIR_FORWARD,  SPEED_DP_56},
+    {MOTOR_DIR_REVERSE,  SPEED_DP_58},
+    {MOTOR_DIR_FORWARD,  SPEED_DP_57},
+    {MOTOR_DIR_REVERSE,  SPEED_DP_56},
+    {MOTOR_DIR_REVERSE,  SPEED_DP_58},
+    {MOTOR_DIR_FORWARD,  SPEED_DP_57},
 };
 
 STATIC UINT32_T app_motor_duty_for_dp(speed_dp_t dp_level)
 {
+    UINT32_T base_duty;
+
     if (dp_level < SPEED_DP_55)
     {
         dp_level = SPEED_DP_55;
@@ -89,7 +129,33 @@ STATIC UINT32_T app_motor_duty_for_dp(speed_dp_t dp_level)
     {
         dp_level = SPEED_DP_59;
     }
-    return s_level_duty[(UINT8_T)(dp_level - SPEED_DP_55)];
+
+    base_duty = s_level_duty[(UINT8_T)(dp_level - SPEED_DP_55)];
+
+    /* USB 插入（充电中）→ 使用固定占空比表，无需补偿 */
+    if (app_charge_is_detected() || app_charge_is_full())
+    {
+        return base_duty;
+    }
+
+    /* 电池供电：电压越低占空比越高（线性反比例补偿） */
+    INT32_T voltage = app_battery_get_voltage();
+    if (voltage < (INT32_T)BATTERY_VOLTAGE_MIN)
+    {
+        voltage = (INT32_T)BATTERY_VOLTAGE_MIN;
+    }
+    if (voltage > (INT32_T)BATTERY_VOLTAGE_MAX)
+    {
+        voltage = (INT32_T)BATTERY_VOLTAGE_MAX;
+    }
+
+    /* 补偿量：4200mV→0, 3300mV→DUTY_BOOST_MAX（线性插值） */
+    UINT32_T range = BATTERY_VOLTAGE_MAX - BATTERY_VOLTAGE_MIN;
+    UINT32_T drop = (UINT32_T)(BATTERY_VOLTAGE_MAX - (UINT32_T)voltage);
+    UINT32_T boost = (drop * DUTY_BOOST_MAX) / range;
+
+    /* base_duty = MOTOR_PWM_DUTY_1 * N_base, 补偿后 = MOTOR_PWM_DUTY_1 * (N_base + boost) */
+    return base_duty + MOTOR_PWM_DUTY_1 * boost;
 }
 
 STATIC VOID_T app_motor_set_direction(UINT8_T direction, speed_dp_t dp_level)
@@ -144,7 +210,7 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
     {
         /* s_variable_seq 循环 5 次 */
         const sm_simple_seq_step_t *step = &s_variable_seq[s_seq_index];
-        app_motor_set_direction(step->dir, SPEED_DP_57);
+        app_motor_set_direction(step->dir, SPEED_DP_59);
         s_seq_index++;
         if (s_seq_index >= VARIABLE_SEQ_STEPS)
         {
@@ -155,11 +221,9 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
                 /* 5 次循环结束 → 随机方向 3s 爆发 */
                 s_var_substate = VAR_SUB_RANDOM;
                 s_var_seq_cycle_count = 0;
-                s_var_rand_seed = (s_var_rand_seed * 13U + 7U) & 0xFFU;
-                s_var_rand_dir = (s_var_rand_seed & 1U) ? MOTOR_DIR_FORWARD : MOTOR_DIR_REVERSE;
-                s_var_rand_seed = (s_var_rand_seed * 13U + 7U) & 0xFFU;
-                s_var_rand_speed = (speed_dp_t)(SPEED_DP_56 + (s_var_rand_seed % 3U));
-                app_motor_set_direction(s_var_rand_dir, s_var_rand_speed);
+                const motor_burst_step_t *burst = &s_rand_burst_seq[s_var_burst_idx];
+                app_motor_set_direction(burst->dir, burst->speed);
+                s_var_burst_idx = (s_var_burst_idx + 1U) % BURST_SEQ_SIZE;
                 tal_sw_timer_start(s_motor_timer_id, RANDOM_BURST_MS, TAL_TIMER_ONCE);
                 return;
             }
@@ -172,7 +236,7 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
         s_var_substate = VAR_SUB_SEQ;
         s_seq_index = 0;
         const sm_simple_seq_step_t *step = &s_variable_seq[0];
-        app_motor_set_direction(step->dir, SPEED_DP_57);
+        app_motor_set_direction(step->dir, SPEED_DP_59);
         s_seq_index = 1;
         tal_sw_timer_start(s_motor_timer_id, step->duration_ms, TAL_TIMER_ONCE);
     }
@@ -200,6 +264,7 @@ VOID_T app_motor_init(VOID_T)
     s_var_substate = VAR_SUB_SEQ;
     s_var_seq_cycle_count = 0;
     s_var_rand_seed = 0;
+    s_var_burst_idx = 0;
 
     TAL_PR_INFO("[motor] initialized");
 }
@@ -215,6 +280,8 @@ VOID_T app_motor_set_mode(work_mode_t mode)
     s_seq_index = 0;
     s_var_substate = VAR_SUB_SEQ;
     s_var_seq_cycle_count = 0;
+    s_var_rand_seed = (s_var_rand_seed * 13U + 7U) & 0xFFU;
+    s_var_burst_idx = s_var_rand_seed % BURST_SEQ_SIZE;
     if (s_motor_enabled)
     {
         app_motor_timer_handler(s_motor_timer_id, NULL);
@@ -257,6 +324,8 @@ VOID_T app_motor_start(VOID_T)
     s_seq_index = 0;
     s_var_substate = VAR_SUB_SEQ;
     s_var_seq_cycle_count = 0;
+    s_var_rand_seed = (s_var_rand_seed * 13U + 7U) & 0xFFU;
+    s_var_burst_idx = s_var_rand_seed % BURST_SEQ_SIZE;
     app_motor_timer_handler(s_motor_timer_id, NULL);
 }
 
