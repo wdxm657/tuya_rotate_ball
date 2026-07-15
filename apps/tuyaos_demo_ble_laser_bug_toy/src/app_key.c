@@ -188,7 +188,7 @@ STATIC VOID_T app_key_poll_handler(TIMER_ID timer_id, VOID_T *arg)
                             /* 短按松开 -> 进入低功耗 */
                             TAL_PR_INFO("[key] short press release (%dms) -> toggle machine power",
                                         press_duration);
-                            app_state_set_power(FALSE);
+                            app_state_toggle_power();
                         }
                     }
 

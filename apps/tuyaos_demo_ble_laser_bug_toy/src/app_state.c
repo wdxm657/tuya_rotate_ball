@@ -5,7 +5,9 @@
 
 #include "tal_log.h"
 #include "tal_sw_timer.h"
+#include "tal_gpio.h"
 
+#include "board.h"
 #include "app_state.h"
 
 STATIC dev_state_t s_dev_state = DEV_STATE_WORK;
@@ -15,7 +17,6 @@ STATIC BOOL_T s_charging = FALSE;
 STATIC BOOL_T s_charge_done = FALSE;
 STATIC BOOL_T s_low_voltage_lock = FALSE;
 STATIC TIMER_ID s_work_timer_id = NULL;
-STATIC TIMER_ID s_sleep_timer_id = NULL;
 STATIC BOOL_T s_run_active = FALSE;
 
 STATIC VOID_T (*s_state_change_cb)(dev_state_t, dev_state_t) = NULL;
@@ -81,9 +82,6 @@ STATIC VOID_T app_state_stop_cycle_timers(VOID_T)
     if (s_work_timer_id != NULL) {
         tal_sw_timer_stop(s_work_timer_id);
     }
-    if (s_sleep_timer_id != NULL) {
-        tal_sw_timer_stop(s_sleep_timer_id);
-    }
 }
 
 STATIC VOID_T app_state_work_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
@@ -93,25 +91,11 @@ STATIC VOID_T app_state_work_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
     }
 
     app_state_set(DEV_STATE_SLEEP);
-    if (s_sleep_timer_id != NULL) {
-        tal_sw_timer_start(s_sleep_timer_id, SLEEP_PERIOD_MS, TAL_TIMER_ONCE);
-    }
-}
-
-STATIC VOID_T app_state_sleep_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
-{
-    if (!s_machine_powered || !s_app_powered || s_low_voltage_lock) {
-        return;
-    }
-
-    app_state_set(DEV_STATE_WORK);
-    app_state_start_work_timer();
 }
 
 VOID_T app_state_init(VOID_T)
 {
     tal_sw_timer_create(app_state_work_timeout_handler, NULL, &s_work_timer_id);
-    tal_sw_timer_create(app_state_sleep_timeout_handler, NULL, &s_sleep_timer_id);
 
     s_machine_powered = TRUE;
     s_app_powered = TRUE;
@@ -200,10 +184,6 @@ BOOL_T app_state_is_powered_on(VOID_T)
 
 VOID_T app_state_set_charging(BOOL_T charging)
 {
-    if (charging)
-    {
-        app_state_set(DEV_STATE_CHARGING);
-    }
     s_charging = charging;
 }
 
@@ -214,10 +194,6 @@ BOOL_T app_state_is_charging(VOID_T)
 
 VOID_T app_state_set_charge_done(BOOL_T done)
 {
-    if (done)
-    {
-        app_state_set(DEV_STATE_CHARGE_DONE);
-    }
     s_charge_done = done;
 }
 
@@ -257,28 +233,42 @@ VOID_T app_state_reset_work_cycle(VOID_T)
     app_state_start_work_timer();
 }
 
+VOID_T app_state_enter_sleep(VOID_T)
+{
+    if (!s_machine_powered || !s_app_powered || s_low_voltage_lock) {
+        return;
+    }
+    app_state_stop_cycle_timers();
+    app_state_set(DEV_STATE_SLEEP);
+}
+
 VOID_T app_state_process(VOID_T)
 {
+    TUYA_GPIO_LEVEL_E level = TUYA_GPIO_LEVEL_HIGH;
+
+    if (s_dev_state != DEV_STATE_SLEEP || !s_machine_powered || !s_app_powered || s_low_voltage_lock) {
+        return;
+    }
+
+    if (tal_gpio_read(PIR, &level) != OPRT_OK) {
+        return;
+    }
+
+    if (level == TUYA_GPIO_LEVEL_LOW) {
+        TAL_PR_INFO("[state] PIR wake");
+        app_state_reset_work_cycle();
+    }
 }
 
 UINT8_T app_state_get_dp_enum(VOID_T)
 {
-    if (s_app_powered)
-    {
-        return app_state_should_run() ? (UINT8_T)DEV_STATE_WORK : (UINT8_T)DEV_STATE_STANDBY;
+    if (s_charge_done) {
+        return (UINT8_T)DEV_STATE_CHARGE_DONE;
     }
-    else{
-        if (s_charge_done || s_charging)
-        {
-            if (s_charge_done) {
-                return (UINT8_T)DEV_STATE_CHARGE_DONE;
-            }
-            if (s_charging) {
-                return (UINT8_T)DEV_STATE_CHARGING;
-            }
-        }
-        return app_state_should_run() ? (UINT8_T)DEV_STATE_WORK : (UINT8_T)DEV_STATE_STANDBY;
-    }    
+    if (s_charging) {
+        return (UINT8_T)DEV_STATE_CHARGING;
+    }
+    return app_state_should_run() ? (UINT8_T)DEV_STATE_WORK : (UINT8_T)DEV_STATE_STANDBY;
 }
 
 VOID_T app_state_register_change_cb(VOID_T (*cb)(dev_state_t, dev_state_t))

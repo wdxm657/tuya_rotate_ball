@@ -1,6 +1,6 @@
 /**
  * @file app_charge.c
- * @brief USB and charge-state detection.
+ * @brief USB charge-state detection for laser bug toy.
  */
 
 #include "tal_log.h"
@@ -14,14 +14,8 @@
 
 #define CHARGE_POLL_MS 100
 
-typedef enum {
-    CHG_STATE_NO_USB,
-    CHG_STATE_CHARGING,
-    CHG_STATE_FULL,
-} charge_state_t;
-
 STATIC TIMER_ID s_charge_timer_id = NULL;
-STATIC charge_state_t s_charge_state = CHG_STATE_NO_USB;
+STATIC BOOL_T s_usb_detected = FALSE;
 
 STATIC BOOL_T app_charge_read_usb(VOID_T)
 {
@@ -32,53 +26,21 @@ STATIC BOOL_T app_charge_read_usb(VOID_T)
     return level == TUYA_GPIO_LEVEL_LOW;
 }
 
-STATIC BOOL_T app_charge_read_active(VOID_T)
+STATIC VOID_T app_charge_apply_state(BOOL_T usb_detected)
 {
-    TUYA_GPIO_LEVEL_E level = TUYA_GPIO_LEVEL_HIGH;
-    if (tal_gpio_read(CHARGE_STATE, &level) != OPRT_OK) {
-        return FALSE;
-    }
-    return level == TUYA_GPIO_LEVEL_LOW;
-}
-
-STATIC VOID_T app_charge_apply_state(charge_state_t state)
-{
-    s_charge_state = state;
-
-    if (state == CHG_STATE_CHARGING) {
-        app_state_set_charging(TRUE);
-        app_state_set_charge_done(FALSE);
-        // tal_gpio_write(Set_Charg_I, app_state_is_powered_on() ? TUYA_GPIO_LEVEL_HIGH : TUYA_GPIO_LEVEL_LOW);
-    } else if (state == CHG_STATE_FULL) {
-        app_state_set_charging(FALSE);
-        app_state_set_charge_done(TRUE);
-        // tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_LOW);
-    } else {
-        app_state_set_charging(FALSE);
-        app_state_set_charge_done(FALSE);
-        // tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_LOW);
-    }
-
+    s_usb_detected = usb_detected;
+    app_state_set_charging(usb_detected);
+    app_state_set_charge_done(FALSE);
     app_led_update();
 }
 
 STATIC VOID_T app_charge_poll_handler(TIMER_ID timer_id, VOID_T *arg)
 {
     BOOL_T usb = app_charge_read_usb();
-    BOOL_T active = app_charge_read_active();
-    charge_state_t new_state;
 
-    if (!usb) {
-        new_state = CHG_STATE_NO_USB;
-    } else if (active) {
-        new_state = CHG_STATE_CHARGING;
-    } else {
-        new_state = CHG_STATE_FULL;
-    }
-
-    if (new_state != s_charge_state) {
-        TAL_PR_INFO("[charge] %d -> %d", s_charge_state, new_state);
-        app_charge_apply_state(new_state);
+    if (usb != s_usb_detected) {
+        TAL_PR_INFO("[charge] usb=%d", usb);
+        app_charge_apply_state(usb);
     }
 }
 
@@ -89,21 +51,10 @@ VOID_T app_charge_init(VOID_T)
         .direct = TUYA_GPIO_INPUT,
         .level = TUYA_GPIO_LEVEL_HIGH,
     };
-    TUYA_GPIO_BASE_CFG_T output_cfg = {
-        .mode = TUYA_GPIO_PUSH_PULL,
-        .direct = TUYA_GPIO_OUTPUT,
-        .level = TUYA_GPIO_LEVEL_HIGH,
-    };
 
     tal_gpio_init(USB_DET, &input_cfg);
-    tal_gpio_init(CHARGE_STATE, &input_cfg);
-    tal_gpio_init(CHARGE_EN, &output_cfg);
-    // tal_gpio_init(Set_Charg_I, &output_cfg);
 
-    tal_gpio_write(CHARGE_EN, TUYA_GPIO_LEVEL_HIGH);
-    // tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_LOW);
-
-    s_charge_state = CHG_STATE_NO_USB;
+    s_usb_detected = FALSE;
     tal_sw_timer_create(app_charge_poll_handler, NULL, &s_charge_timer_id);
     app_charge_poll_handler(s_charge_timer_id, NULL);
     tal_sw_timer_start(s_charge_timer_id, CHARGE_POLL_MS, TAL_TIMER_CYCLE);
@@ -111,10 +62,10 @@ VOID_T app_charge_init(VOID_T)
 
 BOOL_T app_charge_is_detected(VOID_T)
 {
-    return s_charge_state == CHG_STATE_CHARGING;
+    return s_usb_detected;
 }
 
 BOOL_T app_charge_is_full(VOID_T)
 {
-    return s_charge_state == CHG_STATE_FULL;
+    return FALSE;
 }

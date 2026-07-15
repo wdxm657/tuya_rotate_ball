@@ -113,6 +113,9 @@ STATIC TUYA_BLE_BULKDATA_CB_T tuya_ble_bulkdata_cb = {0};
  */
 STATIC VOID_T led_on_state_change(dev_state_t old_state, dev_state_t new_state)
 {
+    if (new_state == DEV_STATE_SLEEP) {
+        app_motor_enter_sleep_mode();
+    }
     app_led_update();
 }
 
@@ -170,7 +173,7 @@ STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
 
     /* 工作模式 */
     {
-        UINT8_T mode = (UINT8_T)app_motor_get_mode();
+        UINT8_T mode = (UINT8_T)app_motor_get_report_mode();
         if (mode != s_last_mode) {
             s_last_mode = mode;
             memset(buf, 0, DT_VALUE_LEN);
@@ -431,6 +434,20 @@ OPERATE_RET tuya_init_third(VOID_T)
     };
     tkl_wakeup_source_set(&usb_wakeup_cfg);
 
+    TUYA_GPIO_BASE_CFG_T pir_input_cfg = {
+        .mode = TUYA_GPIO_PULLUP,
+        .direct = TUYA_GPIO_INPUT,
+        .level = TUYA_GPIO_LEVEL_HIGH,
+    };
+    TUYA_GPIO_BASE_CFG_T pir_con_cfg = {
+        .mode = TUYA_GPIO_PUSH_PULL,
+        .direct = TUYA_GPIO_OUTPUT,
+        .level = TUYA_GPIO_LEVEL_HIGH,
+    };
+    tal_gpio_init(PIR, &pir_input_cfg);
+    tal_gpio_init(PIR_CON, &pir_con_cfg);
+    tal_gpio_write(PIR_CON, TUYA_GPIO_LEVEL_HIGH);
+
     /* ---- 模块初始化 ---- */
     /* 1. 状态机（须在其他模块之前初始化） */
     app_state_init();
@@ -456,15 +473,12 @@ OPERATE_RET tuya_init_third(VOID_T)
 STATIC VOID_T run_off_cb(VOID_T)
 {
     app_motor_stop();
-    // tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_LOW);
     app_led_update();
 }
 
 STATIC VOID_T run_on_cb(VOID_T)
 {
-    if (app_state_is_charging()) {
-        // tal_gpio_write(Set_Charg_I, TUYA_GPIO_LEVEL_HIGH);
-    }
+    app_motor_wake_last_mode();
     app_motor_start();
     app_led_update();
 }

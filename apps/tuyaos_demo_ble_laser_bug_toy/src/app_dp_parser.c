@@ -54,8 +54,12 @@ OPERATE_RET app_dp_parser(UINT8_T *buf, UINT32_T size)
         app_led_update();
         break;
     case DP_ID_MODE:
-        app_motor_set_mode((work_mode_t)g_cmd.dp_data[0]);
-        app_state_reset_work_cycle();
+        app_motor_set_mode((game_mode_t)g_cmd.dp_data[0]);
+        if ((game_mode_t)g_cmd.dp_data[0] == GAME_MODE_SLEEP) {
+            app_state_enter_sleep();
+        } else {
+            app_state_reset_work_cycle();
+        }
         break;
     case DP_ID_STEPLESS_CONTROL: {
         UINT32_T percent;
@@ -123,7 +127,7 @@ VOID_T app_dp_report_all(VOID_T)
     bool_buf[0] = app_state_is_app_power_on() ? 1 : 0;
     app_dp_report(DP_ID_SWITCH, bool_buf, DT_BOOL_LEN);
 
-    enum_buf[0] = (UINT8_T)app_motor_get_mode();
+    enum_buf[0] = (UINT8_T)app_motor_get_report_mode();
     app_dp_report(DP_ID_MODE, enum_buf, DT_ENUM_LEN);
 
     enum_buf[0] = app_state_get_dp_enum();

@@ -113,7 +113,7 @@ extern unsigned int ota_program_offset;
 #define MOTOR_FOR_2       TUYA_PWM_NUM_1 // C3 电机正转 PWM_OUTPUT
 #define MOTOR_3           TUYA_PWM_NUM_0 // C2 直流电机 无正反转
 
-#if CAT_STRING
+#elif CAT_STRING
 // PIN
 // #ifndef BOARD_POWER_ON_PIN
 // #define BOARD_POWER_ON_PIN                      (TUYA_GPIO_NUM_31) // D7 无用 测试引脚
