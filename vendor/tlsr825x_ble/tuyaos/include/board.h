@@ -80,14 +80,45 @@ extern unsigned int ota_program_offset;
 // #define BOARD_FLASH_MAC_START_ADDR              (0)
 // #endif
 #define APP_DATA_FLASH_ADDR 0x7F000
-#define CAT_STRING 1
+#define LASER_BUG 1
+#define CAT_STRING 0
 #define BLE_BALL 0
 
+#if LASER_BUG
+#ifndef BOARD_KEY_PIN
+#define BOARD_KEY_PIN                           (TUYA_GPIO_NUM_28) // D4 按键
+#endif
+
+#if (BOARD_ENABLE_LOG)
+#ifndef BOARD_LOG_TX_PIN
+#define BOARD_LOG_TX_PIN                        (TUYA_GPIO_NUM_14) // B6 日志输出引脚
+#endif
+#endif
+
+
+#define AD_Bat_CON      TUYA_GPIO_NUM_17 // C1 电量ADC控制开关 高电平开 低电平关
+#define LED_G           TUYA_GPIO_NUM_15 // B7 状态指示灯 绿色 高电平开 低电平关
+#define LED_B           TUYA_GPIO_NUM_9  // B1 状态指示灯 蓝色 高电平开 低电平关
+#define LED_R           TUYA_GPIO_NUM_1  // A1 状态指示灯 红色 高电平开 低电平关
+#define USB_DET         TUYA_GPIO_NUM_0  // A0 USB插入检测（低电平=USB插入）
+#define PIR             TUYA_GPIO_NUM_16 // C0 PIR指示 低电平有效
+#define PIR_CON         TUYA_GPIO_NUM_31 // D7 PIR开关 高电平打开 低电平关闭
+#define LASER           TUYA_GPIO_NUM_27 // D3 激光指示灯 高电平打开 低电平关闭
+
+#define AD_Bat 8   // PC4
+
+#define MOTOR_REV_1       TUYA_PWM_NUM_5 // B5 电机反转 PWM_OUTPUT
+#define MOTOR_FOR_1       TUYA_PWM_NUM_4 // B4 电机正转 PWM_OUTPUT
+#define MOTOR_REV_2       TUYA_PWM_NUM_3 // D2 电机反转 PWM_OUTPUT
+#define MOTOR_FOR_2       TUYA_PWM_NUM_1 // C3 电机正转 PWM_OUTPUT
+#define MOTOR_3           TUYA_PWM_NUM_0 // C2 直流电机 无正反转
+
+#if CAT_STRING
 // PIN
 // #ifndef BOARD_POWER_ON_PIN
 // #define BOARD_POWER_ON_PIN                      (TUYA_GPIO_NUM_31) // D7 无用 测试引脚
 // #endif
-#if CAT_STRING
+
 #ifndef BOARD_KEY_PIN
 #define BOARD_KEY_PIN                           (TUYA_GPIO_NUM_16) // C0 按键
 #endif
