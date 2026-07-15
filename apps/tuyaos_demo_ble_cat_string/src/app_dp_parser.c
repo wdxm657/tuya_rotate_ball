@@ -28,6 +28,14 @@ STATIC VOID_T app_dp_set_value(UINT8_T *buf, UINT32_T value)
     buf[3] = (UINT8_T)(value & 0xFF);
 }
 
+STATIC UINT32_T app_dp_get_value(UINT8_T *buf)
+{
+    return ((UINT32_T)buf[0] << 24) |
+           ((UINT32_T)buf[1] << 16) |
+           ((UINT32_T)buf[2] << 8) |
+           ((UINT32_T)buf[3]);
+}
+
 OPERATE_RET app_dp_parser(UINT8_T *buf, UINT32_T size)
 {
     if (buf == NULL || size < 4 || size > SIZEOF(g_cmd)) {
@@ -49,10 +57,21 @@ OPERATE_RET app_dp_parser(UINT8_T *buf, UINT32_T size)
         app_motor_set_mode((work_mode_t)g_cmd.dp_data[0]);
         app_state_reset_work_cycle();
         break;
-    case DP_ID_SPEED_LEVEL:
-        app_motor_set_speed_level(g_cmd.dp_data[0]);
+    case DP_ID_STEPLESS_CONTROL: {
+        UINT32_T percent;
+
+        if (g_cmd.dp_data_len < DT_VALUE_LEN) {
+            return OPRT_INVALID_PARM;
+        }
+        percent = app_dp_get_value(g_cmd.dp_data);
+        if (percent > 100) {
+            percent = 100;
+        }
+        app_dp_set_value(g_cmd.dp_data, percent);
+        app_motor_set_stepless_percent((UINT8_T)percent);
         app_state_reset_work_cycle();
         break;
+    }
     default:
         TAL_PR_DEBUG("[dp] unsupported id=%d", g_cmd.dp_id);
         break;
@@ -74,13 +93,13 @@ OPERATE_RET app_dp_report(UINT8_T dp_id, UINT8_T *buf, UINT32_T size)
         memcpy(g_rsp.dp_data, buf, DT_BOOL_LEN);
         break;
     case DP_ID_MODE:
-    case DP_ID_SPEED_LEVEL:
     case DP_ID_WORK_STATE:
         g_rsp.dp_type = DT_ENUM;
         g_rsp.dp_data_len = DT_ENUM_LEN;
         memcpy(g_rsp.dp_data, buf, DT_ENUM_LEN);
         break;
     case DP_ID_BATTERY:
+    case DP_ID_STEPLESS_CONTROL:
         g_rsp.dp_type = DT_VALUE;
         g_rsp.dp_data_len = DT_VALUE_LEN;
         memcpy(g_rsp.dp_data, buf, DT_VALUE_LEN);
@@ -107,12 +126,12 @@ VOID_T app_dp_report_all(VOID_T)
     enum_buf[0] = (UINT8_T)app_motor_get_mode();
     app_dp_report(DP_ID_MODE, enum_buf, DT_ENUM_LEN);
 
-    enum_buf[0] = app_motor_get_speed_level();
-    app_dp_report(DP_ID_SPEED_LEVEL, enum_buf, DT_ENUM_LEN);
-
     enum_buf[0] = app_state_get_dp_enum();
     app_dp_report(DP_ID_WORK_STATE, enum_buf, DT_ENUM_LEN);
 
     app_dp_set_value(value_buf, app_battery_get_percent());
     app_dp_report(DP_ID_BATTERY, value_buf, DT_VALUE_LEN);
+
+    app_dp_set_value(value_buf, app_motor_get_stepless_percent());
+    app_dp_report(DP_ID_STEPLESS_CONTROL, value_buf, DT_VALUE_LEN);
 }

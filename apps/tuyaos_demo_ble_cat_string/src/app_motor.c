@@ -11,11 +11,18 @@
 #include "app_motor.h"
 #include "app_battery.h"
 #include "app_charge.h"
+#include "app_dp_parser.h"
 
 #define VARIABLE_SEQ_STEPS 3
 #define FIXED_SEQ_STEPS (sizeof(s_fixed_seq) / sizeof(s_fixed_seq[0]))
 #define VARIABLE_SEQ_CYCLES 5
 #define RANDOM_BURST_MS 3000
+#define MOTOR_DUTY_MIN_PERCENT 40
+#define MOTOR_DUTY_MAX_PERCENT 80
+#define MOTOR_DUTY_DEFAULT_PERCENT 50
+#define MOTOR_STEPLESS_DEFAULT_PERCENT \
+    (((MOTOR_DUTY_DEFAULT_PERCENT - MOTOR_DUTY_MIN_PERCENT) * 100) / \
+     (MOTOR_DUTY_MAX_PERCENT - MOTOR_DUTY_MIN_PERCENT))
 
 /* 电池电压补偿参数（mV） */
 #define BATTERY_VOLTAGE_MIN     3300
@@ -23,7 +30,9 @@
 #define DUTY_BOOST_MAX          30      /* N 最大增加值 */
 
 STATIC work_mode_t s_work_mode = WORK_MODE_FIXED;
-STATIC speed_dp_t s_speed_dp = SPEED_DP_55;
+STATIC UINT8_T s_app_stepless_percent = MOTOR_STEPLESS_DEFAULT_PERCENT;
+STATIC UINT8_T s_stepless_percent = MOTOR_STEPLESS_DEFAULT_PERCENT;
+STATIC BOOL_T s_random_duty_active = FALSE;
 STATIC BOOL_T s_motor_enabled = FALSE;
 STATIC BOOL_T s_motor_running = FALSE;
 STATIC TIMER_ID s_motor_timer_id = NULL;
@@ -33,6 +42,7 @@ STATIC UINT8_T s_var_seq_cycle_count = 0;
 
 STATIC UINT8_T s_var_rand_seed = 0;
 STATIC UINT8_T s_var_burst_idx = 0;
+STATIC UINT8_T s_current_direction = MOTOR_DIR_STOP;
 
 typedef enum
 {
@@ -41,14 +51,6 @@ typedef enum
 } var_substate_t;
 
 STATIC var_substate_t s_var_substate = VAR_SUB_SEQ;
-
-STATIC const UINT32_T s_level_duty[5] = {
-    MOTOR_PWM_DUTY_1 * 50,
-    MOTOR_PWM_DUTY_1 * 55,
-    MOTOR_PWM_DUTY_1 * 60,
-    MOTOR_PWM_DUTY_1 * 65,
-    MOTOR_PWM_DUTY_1 * 70,
-};
 
 /** 单步：方向 + 持续时间（毫秒）。调试时序只改 s_sm_slow_fast_seq[]。 */
 typedef struct
@@ -91,55 +93,65 @@ STATIC const sm_simple_seq_step_t s_variable_seq[VARIABLE_SEQ_STEPS] = {
 typedef struct
 {
     UINT8_T dir;
-    speed_dp_t speed;
 } motor_burst_step_t;
 
 STATIC const motor_burst_step_t s_rand_burst_seq[BURST_SEQ_SIZE] = {
-    {MOTOR_DIR_FORWARD,  SPEED_DP_58},
-    {MOTOR_DIR_FORWARD,  SPEED_DP_57},
-    {MOTOR_DIR_REVERSE,  SPEED_DP_56},
-    {MOTOR_DIR_REVERSE,  SPEED_DP_58},
-    {MOTOR_DIR_FORWARD,  SPEED_DP_57},
-    {MOTOR_DIR_REVERSE,  SPEED_DP_56},
-    {MOTOR_DIR_FORWARD,  SPEED_DP_58},
-    {MOTOR_DIR_REVERSE,  SPEED_DP_57},
-    {MOTOR_DIR_REVERSE,  SPEED_DP_56},
-    {MOTOR_DIR_REVERSE,  SPEED_DP_58},
-    {MOTOR_DIR_FORWARD,  SPEED_DP_57},
-    {MOTOR_DIR_FORWARD,  SPEED_DP_56},
-    {MOTOR_DIR_FORWARD,  SPEED_DP_58},
-    {MOTOR_DIR_REVERSE,  SPEED_DP_57},
-    {MOTOR_DIR_FORWARD,  SPEED_DP_56},
-    {MOTOR_DIR_REVERSE,  SPEED_DP_58},
-    {MOTOR_DIR_FORWARD,  SPEED_DP_57},
-    {MOTOR_DIR_REVERSE,  SPEED_DP_56},
-    {MOTOR_DIR_REVERSE,  SPEED_DP_58},
-    {MOTOR_DIR_FORWARD,  SPEED_DP_57},
+    {MOTOR_DIR_FORWARD},
+    {MOTOR_DIR_FORWARD},
+    {MOTOR_DIR_REVERSE},
+    {MOTOR_DIR_REVERSE},
+    {MOTOR_DIR_FORWARD},
+    {MOTOR_DIR_REVERSE},
+    {MOTOR_DIR_FORWARD},
+    {MOTOR_DIR_REVERSE},
+    {MOTOR_DIR_REVERSE},
+    {MOTOR_DIR_REVERSE},
+    {MOTOR_DIR_FORWARD},
+    {MOTOR_DIR_FORWARD},
+    {MOTOR_DIR_FORWARD},
+    {MOTOR_DIR_REVERSE},
+    {MOTOR_DIR_FORWARD},
+    {MOTOR_DIR_REVERSE},
+    {MOTOR_DIR_FORWARD},
+    {MOTOR_DIR_REVERSE},
+    {MOTOR_DIR_REVERSE},
+    {MOTOR_DIR_FORWARD},
 };
 
-STATIC UINT32_T app_motor_duty_for_dp(speed_dp_t dp_level)
+STATIC UINT32_T app_motor_duty_for_stepless(UINT8_T percent)
 {
-    UINT32_T base_duty;
+    UINT32_T base_percent;
+    UINT32_T duty_percent;
+    INT32_T voltage;
+    UINT32_T range;
+    UINT32_T drop;
+    UINT32_T boost;
 
-    if (dp_level < SPEED_DP_55)
-    {
-        dp_level = SPEED_DP_55;
+    if (percent > 100) {
+        percent = 100;
     }
-    if (dp_level > SPEED_DP_59)
-    {
-        dp_level = SPEED_DP_59;
+
+    if (s_random_duty_active) {
+        if (percent < MOTOR_DUTY_MIN_PERCENT) {
+            percent = MOTOR_DUTY_MIN_PERCENT;
+        }
+        if (percent > MOTOR_DUTY_MAX_PERCENT) {
+            percent = MOTOR_DUTY_MAX_PERCENT;
+        }
+        base_percent = percent;
+    } else {
+        base_percent = MOTOR_DUTY_MIN_PERCENT +
+                       ((UINT32_T)percent * (MOTOR_DUTY_MAX_PERCENT - MOTOR_DUTY_MIN_PERCENT)) / 100;
     }
 
-    base_duty = s_level_duty[(UINT8_T)(dp_level - SPEED_DP_55)];
-
-    /* USB 插入（充电中）→ 使用固定占空比表，无需补偿 */
+    /* USB inserted or charge done: use the mapped duty without voltage compensation. */
     if (app_charge_is_detected() || app_charge_is_full())
     {
-        return base_duty;
+        return MOTOR_PWM_DUTY_1 * base_percent;
     }
 
     /* 电池供电：电压越低占空比越高（线性反比例补偿） */
-    INT32_T voltage = app_battery_get_voltage();
+    voltage = app_battery_get_voltage();
     if (voltage < (INT32_T)BATTERY_VOLTAGE_MIN)
     {
         voltage = (INT32_T)BATTERY_VOLTAGE_MIN;
@@ -150,29 +162,36 @@ STATIC UINT32_T app_motor_duty_for_dp(speed_dp_t dp_level)
     }
 
     /* 补偿量：4200mV→0, 3300mV→DUTY_BOOST_MAX（线性插值） */
-    UINT32_T range = BATTERY_VOLTAGE_MAX - BATTERY_VOLTAGE_MIN;
-    UINT32_T drop = (UINT32_T)(BATTERY_VOLTAGE_MAX - (UINT32_T)voltage);
-    UINT32_T boost = (drop * DUTY_BOOST_MAX) / range;
+    range = BATTERY_VOLTAGE_MAX - BATTERY_VOLTAGE_MIN;
+    drop = (UINT32_T)(BATTERY_VOLTAGE_MAX - (UINT32_T)voltage);
+    boost = (drop * DUTY_BOOST_MAX) / range;
 
-    /* base_duty = MOTOR_PWM_DUTY_1 * N_base, 补偿后 = MOTOR_PWM_DUTY_1 * (N_base + boost) */
-    return base_duty + MOTOR_PWM_DUTY_1 * boost;
+    /* Mapped base percent plus low-voltage boost, capped at 100%. */
+    duty_percent = base_percent + boost;
+    if (duty_percent > 100) {
+        duty_percent = 100;
+    }
+
+    return MOTOR_PWM_DUTY_1 * duty_percent;
 }
 
-STATIC VOID_T app_motor_set_direction(UINT8_T direction, speed_dp_t dp_level)
+STATIC VOID_T app_motor_set_direction(UINT8_T direction)
 {
-    UINT32_T duty = app_motor_duty_for_dp(dp_level);
+    UINT32_T duty = app_motor_duty_for_stepless(s_stepless_percent);
+
+    s_current_direction = direction;
 
     switch (direction)
     {
     case MOTOR_DIR_FORWARD:
         tal_pwm_duty_set(MOTOR_PWM_CH_FOR, duty);
         tal_pwm_duty_set(MOTOR_PWM_CH_REV, MOTOR_PWM_DUTY_0);
-        s_motor_running = TRUE;
+        s_motor_running = (duty > 0);
         break;
     case MOTOR_DIR_REVERSE:
         tal_pwm_duty_set(MOTOR_PWM_CH_FOR, MOTOR_PWM_DUTY_0);
         tal_pwm_duty_set(MOTOR_PWM_CH_REV, duty);
-        s_motor_running = TRUE;
+        s_motor_running = (duty > 0);
         break;
     case MOTOR_DIR_STOP:
     default:
@@ -183,19 +202,50 @@ STATIC VOID_T app_motor_set_direction(UINT8_T direction, speed_dp_t dp_level)
     }
 }
 
+STATIC VOID_T app_motor_report_stepless_percent(VOID_T);
+
+STATIC UINT8_T app_motor_next_random_duty_percent(VOID_T)
+{
+    s_var_rand_seed = (s_var_rand_seed * 13U + 7U) & 0xFFU;
+    return (UINT8_T)(MOTOR_DUTY_MIN_PERCENT +
+                     (s_var_rand_seed % (MOTOR_DUTY_MAX_PERCENT - MOTOR_DUTY_MIN_PERCENT + 1)));
+}
+
+STATIC VOID_T app_motor_use_random_duty(VOID_T)
+{
+    s_random_duty_active = TRUE;
+    s_stepless_percent = app_motor_next_random_duty_percent();
+    TAL_PR_INFO("[motor] random duty percent=%d", s_stepless_percent);
+    app_motor_report_stepless_percent();
+}
+
+STATIC VOID_T app_motor_restore_app_duty(VOID_T)
+{
+    s_random_duty_active = FALSE;
+    s_stepless_percent = s_app_stepless_percent;
+}
+
+STATIC VOID_T app_motor_report_stepless_percent(VOID_T)
+{
+    UINT8_T buf[4] = {0};
+
+    buf[3] = s_stepless_percent;
+    app_dp_report(DP_ID_STEPLESS_CONTROL, buf, 4);
+}
+
 STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
 {
     if (!s_motor_enabled)
     {
-        app_motor_set_direction(MOTOR_DIR_STOP, s_speed_dp);
+        app_motor_set_direction(MOTOR_DIR_STOP);
         return;
     }
 
     if (s_work_mode == WORK_MODE_FIXED)
     {
-        /* 固定模式：按 s_fixed_seq 表逐歩运动，占空比使用 dp 最新挡位 */
+        /* 固定模式：按 s_fixed_seq 表逐歩运动，占空比使用 DP30 映射值 */
         const sm_simple_seq_step_t *step = &s_fixed_seq[s_seq_index];
-        app_motor_set_direction(step->dir, s_speed_dp);
+        app_motor_set_direction(step->dir);
         s_seq_index++;
         if (s_seq_index >= FIXED_SEQ_STEPS)
         {
@@ -210,7 +260,7 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
     {
         /* s_variable_seq 循环 5 次 */
         const sm_simple_seq_step_t *step = &s_variable_seq[s_seq_index];
-        app_motor_set_direction(step->dir, SPEED_DP_59);
+        app_motor_set_direction(step->dir);
         s_seq_index++;
         if (s_seq_index >= VARIABLE_SEQ_STEPS)
         {
@@ -222,7 +272,8 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
                 s_var_substate = VAR_SUB_RANDOM;
                 s_var_seq_cycle_count = 0;
                 const motor_burst_step_t *burst = &s_rand_burst_seq[s_var_burst_idx];
-                app_motor_set_direction(burst->dir, burst->speed);
+                app_motor_use_random_duty();
+                app_motor_set_direction(burst->dir);
                 s_var_burst_idx = (s_var_burst_idx + 1U) % BURST_SEQ_SIZE;
                 tal_sw_timer_start(s_motor_timer_id, RANDOM_BURST_MS, TAL_TIMER_ONCE);
                 return;
@@ -236,7 +287,9 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
         s_var_substate = VAR_SUB_SEQ;
         s_seq_index = 0;
         const sm_simple_seq_step_t *step = &s_variable_seq[0];
-        app_motor_set_direction(step->dir, SPEED_DP_59);
+        app_motor_restore_app_duty();
+        app_motor_report_stepless_percent();
+        app_motor_set_direction(step->dir);
         s_seq_index = 1;
         tal_sw_timer_start(s_motor_timer_id, step->duration_ms, TAL_TIMER_ONCE);
     }
@@ -257,7 +310,9 @@ VOID_T app_motor_init(VOID_T)
     tal_sw_timer_create(app_motor_timer_handler, NULL, &s_motor_timer_id);
 
     s_work_mode = WORK_MODE_FIXED;
-    s_speed_dp = SPEED_DP_55;
+    s_app_stepless_percent = MOTOR_STEPLESS_DEFAULT_PERCENT;
+    s_stepless_percent = MOTOR_STEPLESS_DEFAULT_PERCENT;
+    s_random_duty_active = FALSE;
     s_motor_enabled = FALSE;
     s_motor_running = FALSE;
     s_seq_index = 0;
@@ -265,6 +320,7 @@ VOID_T app_motor_init(VOID_T)
     s_var_seq_cycle_count = 0;
     s_var_rand_seed = 0;
     s_var_burst_idx = 0;
+    s_current_direction = MOTOR_DIR_STOP;
 
     TAL_PR_INFO("[motor] initialized");
 }
@@ -280,6 +336,7 @@ VOID_T app_motor_set_mode(work_mode_t mode)
     s_seq_index = 0;
     s_var_substate = VAR_SUB_SEQ;
     s_var_seq_cycle_count = 0;
+    app_motor_restore_app_duty();
     s_var_rand_seed = (s_var_rand_seed * 13U + 7U) & 0xFFU;
     s_var_burst_idx = s_var_rand_seed % BURST_SEQ_SIZE;
     if (s_motor_enabled)
@@ -294,24 +351,25 @@ work_mode_t app_motor_get_mode(VOID_T)
     return s_work_mode;
 }
 
-VOID_T app_motor_set_speed_level(UINT8_T dp_level)
+VOID_T app_motor_set_stepless_percent(UINT8_T percent)
 {
-    if (dp_level < SPEED_DP_55)
-    {
-        dp_level = SPEED_DP_55;
+    if (percent > 100) {
+        percent = 100;
     }
-    if (dp_level > SPEED_DP_59)
-    {
-        dp_level = SPEED_DP_59;
+
+    s_app_stepless_percent = percent;
+    if (!s_random_duty_active) {
+        s_stepless_percent = s_app_stepless_percent;
     }
-    s_speed_dp = (speed_dp_t)dp_level;
-    /* 仅更新挡位，由定时器处理函数在下一步自动使用新占空比 */
-    TAL_PR_INFO("[motor] speed dp=%d", s_speed_dp);
+    if (s_motor_enabled && !s_random_duty_active) {
+        app_motor_set_direction(s_current_direction);
+    }
+    TAL_PR_INFO("[motor] stepless percent=%d", s_stepless_percent);
 }
 
-UINT8_T app_motor_get_speed_level(VOID_T)
+UINT8_T app_motor_get_stepless_percent(VOID_T)
 {
-    return (UINT8_T)s_speed_dp;
+    return s_stepless_percent;
 }
 
 VOID_T app_motor_start(VOID_T)
@@ -324,8 +382,10 @@ VOID_T app_motor_start(VOID_T)
     s_seq_index = 0;
     s_var_substate = VAR_SUB_SEQ;
     s_var_seq_cycle_count = 0;
+    app_motor_restore_app_duty();
     s_var_rand_seed = (s_var_rand_seed * 13U + 7U) & 0xFFU;
     s_var_burst_idx = s_var_rand_seed % BURST_SEQ_SIZE;
+    s_current_direction = MOTOR_DIR_STOP;
     app_motor_timer_handler(s_motor_timer_id, NULL);
 }
 
@@ -336,7 +396,8 @@ VOID_T app_motor_stop(VOID_T)
         tal_sw_timer_stop(s_motor_timer_id);
     }
     s_motor_enabled = FALSE;
-    app_motor_set_direction(MOTOR_DIR_STOP, s_speed_dp);
+    app_motor_restore_app_duty();
+    app_motor_set_direction(MOTOR_DIR_STOP);
 }
 
 BOOL_T app_motor_is_running(VOID_T)

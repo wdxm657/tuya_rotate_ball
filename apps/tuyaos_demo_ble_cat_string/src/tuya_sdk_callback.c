@@ -140,7 +140,7 @@ STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
     static UINT8_T s_last_battery = 0xFF;
     static UINT8_T s_last_switch  = 0xFF;
     static UINT8_T s_last_mode    = 0xFF;
-    static UINT8_T s_last_speed   = 0xFF;
+    static UINT8_T s_last_stepless = 0xFF;
     static UINT8_T s_last_work_state = 0xFF;
 
     UINT8_T buf[DT_VALUE_LEN] = {0};
@@ -168,18 +168,6 @@ STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
         }
     }
 
-    /* 速度挡位 */
-    {
-        UINT8_T speed = app_motor_get_speed_level();
-        if (speed != s_last_speed) {
-            s_last_speed = speed;
-            memset(buf, 0, DT_VALUE_LEN);
-            buf[0] = speed;
-            app_dp_report(DP_ID_SPEED_LEVEL, buf, DT_ENUM_LEN);
-            TAL_PR_DEBUG("[dp] speed report: %d", speed);
-        }
-    }
-
     /* 工作模式 */
     {
         UINT8_T mode = (UINT8_T)app_motor_get_mode();
@@ -189,6 +177,18 @@ STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
             buf[0] = mode;
             app_dp_report(DP_ID_MODE, buf, DT_ENUM_LEN);
             TAL_PR_DEBUG("[dp] mode report: %d", mode);
+        }
+    }
+
+    /* PWM stepless duty */
+    {
+        UINT8_T stepless = app_motor_get_stepless_percent();
+        if (stepless != s_last_stepless) {
+            s_last_stepless = stepless;
+            memset(buf, 0, DT_VALUE_LEN);
+            buf[3] = stepless;
+            app_dp_report(DP_ID_STEPLESS_CONTROL, buf, DT_VALUE_LEN);
+            TAL_PR_DEBUG("[dp] stepless report: %d", stepless);
         }
     }
 

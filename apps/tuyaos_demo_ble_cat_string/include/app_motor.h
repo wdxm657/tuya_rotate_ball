@@ -27,14 +27,6 @@ extern "C" {
 #define MOTOR_PWM_DUTY_100      (MOTOR_PWM_DUTY_1 * 10000)
 
 typedef enum {
-    SPEED_DP_55 = 0,
-    SPEED_DP_56 = 1,
-    SPEED_DP_57 = 2,
-    SPEED_DP_58 = 3,
-    SPEED_DP_59 = 4,
-} speed_dp_t;
-
-typedef enum {
     WORK_MODE_FIXED   = 0,
     WORK_MODE_VARIABLE = 1,
 } work_mode_t;
@@ -42,8 +34,8 @@ typedef enum {
 VOID_T app_motor_init(VOID_T);
 VOID_T app_motor_set_mode(work_mode_t mode);
 work_mode_t app_motor_get_mode(VOID_T);
-VOID_T app_motor_set_speed_level(UINT8_T dp_level);
-UINT8_T app_motor_get_speed_level(VOID_T);
+VOID_T app_motor_set_stepless_percent(UINT8_T percent);
+UINT8_T app_motor_get_stepless_percent(VOID_T);
 VOID_T app_motor_start(VOID_T);
 VOID_T app_motor_stop(VOID_T);
 BOOL_T app_motor_is_running(VOID_T);

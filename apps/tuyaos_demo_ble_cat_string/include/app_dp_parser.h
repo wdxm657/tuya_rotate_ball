@@ -15,10 +15,8 @@ extern "C" {
 #define DP_ID_SWITCH           1   /* bool rw: App on/off */
 #define DP_ID_MODE             4   /* enum rw: ConstantSpeed/VariableSpeed */
 #define DP_ID_BATTERY         18   /* value ro: 0~100 */
-#define DP_ID_SPEED_LEVEL     22   /* enum rw: raw value 55/56/57/58/59 */
 #define DP_ID_WORK_STATE      26   /* enum ro: work/standby/charging/charge_done */
-
-#define DP_ID_MOVEMENT_LEVEL  DP_ID_SPEED_LEVEL
+#define DP_ID_STEPLESS_CONTROL 30  /* value rw: control 0~100 maps to PWM duty 40~80 */
 
 #pragma pack(1)
 typedef struct {
