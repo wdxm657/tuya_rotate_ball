@@ -524,11 +524,11 @@ STATIC VOID_T machine_power_on_cb(VOID_T)
 OPERATE_RET tuya_init_last(VOID_T)
 {
     // PB1 TX   PB7 RX
-    tal_uart_init(TUYA_UART_NUM_0, &tal_uart_cfg);
+    // tal_uart_init(TUYA_UART_NUM_0, &tal_uart_cfg);
 
     tuya_ble_protocol_init();
 
-    tal_uart_rx_reg_irq_cb(TUYA_UART_NUM_0, tuya_uart_irq_rx_cb);
+    // tal_uart_rx_reg_irq_cb(TUYA_UART_NUM_0, tuya_uart_irq_rx_cb);
 
 #if defined(TUYA_SDK_TEST) && (TUYA_SDK_TEST == 1)
     tal_sdk_test_init();
