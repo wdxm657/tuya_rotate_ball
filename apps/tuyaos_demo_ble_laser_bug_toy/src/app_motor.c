@@ -16,7 +16,8 @@
 
 #define BUG_SEQ_STEPS          2
 #define MOTOR_STEP_MS          1000
-#define BUG_PULL_STEP_MS       1000
+#define BUG_PULL_STEP_MAX_MS   1000
+#define BUG_PULL_STEP_MIN_MS   500
 #define BUG_DIRECTION_STOP_MS  1000
 #define BUG_PULL_REPEAT_COUNT  1
 #define BUG_PULL_BOOST_PERCENT 30
@@ -41,8 +42,8 @@ typedef struct {
 } motor_step_t;
 
 STATIC const motor_step_t s_bug_seq[BUG_SEQ_STEPS] = {
-    {MOTOR_DIR_FORWARD, MOTOR_DIR_FORWARD, FALSE, BUG_PULL_STEP_MS, TRUE,  FALSE},
-    {MOTOR_DIR_REVERSE, MOTOR_DIR_REVERSE, FALSE, BUG_PULL_STEP_MS, FALSE, TRUE},
+    {MOTOR_DIR_FORWARD, MOTOR_DIR_FORWARD, FALSE, BUG_PULL_STEP_MAX_MS, TRUE,  FALSE},
+    {MOTOR_DIR_REVERSE, MOTOR_DIR_REVERSE, FALSE, BUG_PULL_STEP_MAX_MS, FALSE, TRUE},
 };
 
 STATIC game_mode_t s_game_mode = GAME_MODE_BUG_HUNT;
@@ -200,6 +201,21 @@ STATIC VOID_T app_motor_bug_stop(VOID_T)
     s_motor_running = FALSE;
 }
 
+STATIC UINT16_T app_motor_bug_pull_step_ms(VOID_T)
+{
+    UINT32_T percent = s_stepless_percent;
+    UINT32_T range = BUG_PULL_STEP_MAX_MS - BUG_PULL_STEP_MIN_MS;
+
+    if (percent < 1) {
+        percent = 1;
+    }
+    if (percent > 100) {
+        percent = 100;
+    }
+
+    return (UINT16_T)(BUG_PULL_STEP_MAX_MS - (((percent - 1) * range) / 99));
+}
+
 STATIC UINT16_T app_motor_bug_tick(VOID_T)
 {
     const motor_step_t *step;
@@ -213,7 +229,7 @@ STATIC UINT16_T app_motor_bug_tick(VOID_T)
     step = &s_bug_seq[s_seq_index];
     app_motor_apply_step(step);
     s_bug_pause_active = app_motor_advance_bug_step();
-    return step->duration_ms;
+    return app_motor_bug_pull_step_ms();
 }
 
 STATIC VOID_T app_motor_alternating_handler(VOID_T)
