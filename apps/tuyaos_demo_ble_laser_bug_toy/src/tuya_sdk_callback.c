@@ -145,6 +145,8 @@ STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
     static UINT8_T s_last_mode    = 0xFF;
     static UINT8_T s_last_stepless = 0xFF;
     static UINT8_T s_last_work_state = 0xFF;
+    static UINT16_T s_last_alt_laser_time = 0xFFFF;
+    static UINT16_T s_last_alt_bug_time = 0xFFFF;
 
     UINT8_T buf[DT_VALUE_LEN] = {0};
 
@@ -196,6 +198,28 @@ STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
     }
 
     /* 工作状态 */
+    {
+        UINT16_T seconds = app_motor_get_alt_laser_time();
+        if (seconds != s_last_alt_laser_time) {
+            s_last_alt_laser_time = seconds;
+            memset(buf, 0, DT_VALUE_LEN);
+            buf[3] = (UINT8_T)seconds;
+            app_dp_report(DP_ID_ALT_LASER_TIME, buf, DT_VALUE_LEN);
+            TAL_PR_DEBUG("[dp] alt laser time report: %d", seconds);
+        }
+    }
+
+    {
+        UINT16_T seconds = app_motor_get_alt_bug_time();
+        if (seconds != s_last_alt_bug_time) {
+            s_last_alt_bug_time = seconds;
+            memset(buf, 0, DT_VALUE_LEN);
+            buf[3] = (UINT8_T)seconds;
+            app_dp_report(DP_ID_ALT_BUG_TIME, buf, DT_VALUE_LEN);
+            TAL_PR_DEBUG("[dp] alt bug time report: %d", seconds);
+        }
+    }
+
     {
         UINT8_T state = app_state_get_dp_enum();
         if (state != s_last_work_state) {

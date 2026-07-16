@@ -17,8 +17,9 @@
 #define FIXED_SEQ_STEPS (sizeof(s_fixed_seq) / sizeof(s_fixed_seq[0]))
 #define VARIABLE_SEQ_CYCLES 5
 #define RANDOM_BURST_MS 3000
+#define RANDOM_STOP_MS 2000
 #define MOTOR_DUTY_MIN_PERCENT 40
-#define MOTOR_DUTY_MAX_PERCENT 80
+#define MOTOR_DUTY_MAX_PERCENT 70
 #define MOTOR_DUTY_DEFAULT_PERCENT 50
 #define MOTOR_STEPLESS_DEFAULT_PERCENT \
     (((MOTOR_DUTY_DEFAULT_PERCENT - MOTOR_DUTY_MIN_PERCENT) * 100) / \
@@ -48,6 +49,7 @@ typedef enum
 {
     VAR_SUB_SEQ,
     VAR_SUB_RANDOM,
+    VAR_SUB_STOP,
 } var_substate_t;
 
 STATIC var_substate_t s_var_substate = VAR_SUB_SEQ;
@@ -175,9 +177,12 @@ STATIC UINT32_T app_motor_duty_for_stepless(UINT8_T percent)
     return MOTOR_PWM_DUTY_1 * duty_percent;
 }
 
-STATIC VOID_T app_motor_set_direction(UINT8_T direction)
+STATIC VOID_T app_motor_set_direction(UINT8_T direction, UINT32_T duty)
 {
-    UINT32_T duty = app_motor_duty_for_stepless(s_stepless_percent);
+    if (duty == NULL)
+    {
+        duty = app_motor_duty_for_stepless(s_stepless_percent);
+    }
 
     s_current_direction = direction;
 
@@ -237,7 +242,7 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
 {
     if (!s_motor_enabled)
     {
-        app_motor_set_direction(MOTOR_DIR_STOP);
+        app_motor_set_direction(MOTOR_DIR_STOP,NULL);
         return;
     }
 
@@ -245,7 +250,7 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
     {
         /* 固定模式：按 s_fixed_seq 表逐歩运动，占空比使用 DP30 映射值 */
         const sm_simple_seq_step_t *step = &s_fixed_seq[s_seq_index];
-        app_motor_set_direction(step->dir);
+        app_motor_set_direction(step->dir,NULL);
         s_seq_index++;
         if (s_seq_index >= FIXED_SEQ_STEPS)
         {
@@ -260,7 +265,7 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
     {
         /* s_variable_seq 循环 5 次 */
         const sm_simple_seq_step_t *step = &s_variable_seq[s_seq_index];
-        app_motor_set_direction(step->dir);
+        app_motor_set_direction(step->dir,70 * MOTOR_PWM_DUTY_1);
         s_seq_index++;
         if (s_seq_index >= VARIABLE_SEQ_STEPS)
         {
@@ -272,8 +277,8 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
                 s_var_substate = VAR_SUB_RANDOM;
                 s_var_seq_cycle_count = 0;
                 const motor_burst_step_t *burst = &s_rand_burst_seq[s_var_burst_idx];
-                app_motor_use_random_duty();
-                app_motor_set_direction(burst->dir);
+                // app_motor_use_random_duty();
+                app_motor_set_direction(burst->dir,app_motor_next_random_duty_percent() * MOTOR_PWM_DUTY_1);
                 s_var_burst_idx = (s_var_burst_idx + 1U) % BURST_SEQ_SIZE;
                 tal_sw_timer_start(s_motor_timer_id, RANDOM_BURST_MS, TAL_TIMER_ONCE);
                 return;
@@ -281,15 +286,22 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
         }
         tal_sw_timer_start(s_motor_timer_id, step->duration_ms, TAL_TIMER_ONCE);
     }
+    else if (s_var_substate == VAR_SUB_RANDOM)
+    {
+        /* VAR_SUB_RANDOM：3s 爆发结束，停止 2s 后再切回 seq 循环 */
+        s_var_substate = VAR_SUB_STOP;
+        app_motor_set_direction(MOTOR_DIR_STOP,NULL);
+        tal_sw_timer_start(s_motor_timer_id, RANDOM_STOP_MS, TAL_TIMER_ONCE);
+    }
     else
     {
-        /* VAR_SUB_RANDOM：3s 爆发结束，切回 seq 循环 */
+        /* VAR_SUB_STOP：2s 停止结束，切回 seq 循环 */
         s_var_substate = VAR_SUB_SEQ;
         s_seq_index = 0;
         const sm_simple_seq_step_t *step = &s_variable_seq[0];
-        app_motor_restore_app_duty();
-        app_motor_report_stepless_percent();
-        app_motor_set_direction(step->dir);
+        // app_motor_restore_app_duty();
+        // app_motor_report_stepless_percent();
+        app_motor_set_direction(step->dir,70 * MOTOR_PWM_DUTY_1);
         s_seq_index = 1;
         tal_sw_timer_start(s_motor_timer_id, step->duration_ms, TAL_TIMER_ONCE);
     }
@@ -362,7 +374,7 @@ VOID_T app_motor_set_stepless_percent(UINT8_T percent)
         s_stepless_percent = s_app_stepless_percent;
     }
     if (s_motor_enabled && !s_random_duty_active) {
-        app_motor_set_direction(s_current_direction);
+        app_motor_set_direction(s_current_direction,NULL);
     }
     TAL_PR_INFO("[motor] stepless percent=%d", s_stepless_percent);
 }
@@ -397,7 +409,7 @@ VOID_T app_motor_stop(VOID_T)
     }
     s_motor_enabled = FALSE;
     app_motor_restore_app_duty();
-    app_motor_set_direction(MOTOR_DIR_STOP);
+    app_motor_set_direction(MOTOR_DIR_STOP,NULL);
 }
 
 BOOL_T app_motor_is_running(VOID_T)

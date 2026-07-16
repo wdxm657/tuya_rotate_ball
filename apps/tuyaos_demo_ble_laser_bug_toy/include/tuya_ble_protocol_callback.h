@@ -24,7 +24,7 @@ extern "C" {
 //FIR - firmware, FVER - firmware version, HVER - hardware version
 #define TY_DEVICE_NAME        "TyOS"
 // #define TY_DEVICE_PID         "3aubjk7p" //oem no use
-#define TY_DEVICE_PID         "ytaqgucz"
+#define TY_DEVICE_PID         "unafzjk7"
 
 #define SWITCH_TY 2
 
@@ -33,13 +33,13 @@ extern "C" {
 #define TY_DEVICE_DID         "tuya07d9624bc2e5" //16Bytes
 #define TY_DEVICE_AUTH_KEY    "fs1RKoeL4W3AYNFSCRgCW2ev6tOFmeer" //32Bytes
 #elif(SWITCH_TY==1)
-#define TY_DEVICE_MAC         "DC2353C6A38A"
-#define TY_DEVICE_DID         "uuid6a9439dded85" //16Bytes
-#define TY_DEVICE_AUTH_KEY    "ZWWyLkOD5V3gksgEdEa8ddSuPBismztt" //32Bytes
+#define TY_DEVICE_MAC         "DC2353C8793A"
+#define TY_DEVICE_DID         "uuid1d72d094b172" //16Bytes
+#define TY_DEVICE_AUTH_KEY    "wbEXBamLAERrd1otaRQAH7WeARVbiTTL" //32Bytes
 #elif(SWITCH_TY==2)
-#define TY_DEVICE_MAC         "DC2353C6A38B"
-#define TY_DEVICE_DID         "uuid8f4ff4251b9c" //16Bytes
-#define TY_DEVICE_AUTH_KEY    "hNVIfbmUD1tWe7xb75g0qKva2Ao7vZhY" //32Bytes
+#define TY_DEVICE_MAC         "DC2353C8793B"
+#define TY_DEVICE_DID         "uuid34ff24e92637" //16Bytes
+#define TY_DEVICE_AUTH_KEY    "qsUGKhpCe4wzhAWZkPw7gTTAd6TH6eYY" //32Bytes
 #endif
 #define TY_ADV_INTERVAL       20   //range: 20~10240ms
 #define TY_CONN_INTERVAL_MIN  15   //range: 7.5~4000ms

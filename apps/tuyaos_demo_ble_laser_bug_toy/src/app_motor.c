@@ -12,12 +12,17 @@
 #include "app_motor.h"
 #include "app_battery.h"
 #include "app_charge.h"
+#include "app_state.h"
 
-#define BUG_SEQ_STEPS          4
-#define ALT_SEQ_STEPS          5
+#define BUG_SEQ_STEPS          8
 #define MOTOR_STEP_MS          1000
-#define MOTOR_DUTY_MIN_PERCENT 40
-#define MOTOR_DUTY_MAX_PERCENT 80
+#define BUG_RELEASE_MS         10
+#define BUG_PULL_MS            30
+#define BUG_DEBUG_STOP_MS      100
+#define BUG_DIRECTION_STOP_MS  1000
+#define BUG_PULL_REPEAT_COUNT  30
+#define MOTOR_DUTY_MIN_PERCENT 0
+#define MOTOR_DUTY_MAX_PERCENT 100
 #define MOTOR_DUTY_DEFAULT_PERCENT 50
 #define MOTOR_STEPLESS_DEFAULT_PERCENT \
     (((MOTOR_DUTY_DEFAULT_PERCENT - MOTOR_DUTY_MIN_PERCENT) * 100) / \
@@ -25,7 +30,7 @@
 
 #define BATTERY_VOLTAGE_MIN    3300
 #define BATTERY_VOLTAGE_MAX    4200
-#define DUTY_BOOST_MAX         30
+#define DUTY_BOOST_MAX         0
 
 typedef struct {
     UINT8_T m1_dir;
@@ -35,27 +40,28 @@ typedef struct {
 } motor_step_t;
 
 STATIC const motor_step_t s_bug_seq[BUG_SEQ_STEPS] = {
-    {MOTOR_DIR_FORWARD, MOTOR_DIR_REVERSE, FALSE, MOTOR_STEP_MS},
-    {MOTOR_DIR_STOP,    MOTOR_DIR_STOP,    FALSE, MOTOR_STEP_MS},
-    {MOTOR_DIR_REVERSE, MOTOR_DIR_FORWARD, FALSE, MOTOR_STEP_MS},
-    {MOTOR_DIR_STOP,    MOTOR_DIR_STOP,    FALSE, MOTOR_STEP_MS},
+    {MOTOR_DIR_STOP,    MOTOR_DIR_FORWARD, FALSE, BUG_RELEASE_MS},
+    {MOTOR_DIR_FORWARD, MOTOR_DIR_STOP,    FALSE, BUG_PULL_MS},
+    {MOTOR_DIR_STOP,    MOTOR_DIR_STOP,    FALSE, BUG_DEBUG_STOP_MS},
+    {MOTOR_DIR_STOP,    MOTOR_DIR_STOP,    FALSE, BUG_DIRECTION_STOP_MS},
+    {MOTOR_DIR_REVERSE, MOTOR_DIR_STOP,    FALSE, BUG_RELEASE_MS},
+    {MOTOR_DIR_STOP,    MOTOR_DIR_REVERSE, FALSE, BUG_PULL_MS},
+    {MOTOR_DIR_STOP,    MOTOR_DIR_STOP,    FALSE, BUG_DEBUG_STOP_MS},
+    {MOTOR_DIR_STOP,    MOTOR_DIR_STOP,    FALSE, BUG_DIRECTION_STOP_MS},
 };
 
-STATIC const motor_step_t s_alt_seq[ALT_SEQ_STEPS] = {
-    {MOTOR_DIR_FORWARD, MOTOR_DIR_REVERSE, FALSE, MOTOR_STEP_MS},
-    {MOTOR_DIR_STOP,    MOTOR_DIR_STOP,    FALSE, MOTOR_STEP_MS},
-    {MOTOR_DIR_REVERSE, MOTOR_DIR_FORWARD, FALSE, MOTOR_STEP_MS},
-    {MOTOR_DIR_STOP,    MOTOR_DIR_STOP,    FALSE, MOTOR_STEP_MS},
-    {MOTOR_DIR_STOP,    MOTOR_DIR_STOP,    TRUE,  MOTOR_STEP_MS},
-};
-
-STATIC game_mode_t s_game_mode = GAME_MODE_LASER_CHASE;
-STATIC game_mode_t s_last_active_mode = GAME_MODE_LASER_CHASE;
+STATIC game_mode_t s_game_mode = GAME_MODE_BUG_HUNT;
+STATIC game_mode_t s_last_active_mode = GAME_MODE_BUG_HUNT;
 STATIC UINT8_T s_stepless_percent = MOTOR_STEPLESS_DEFAULT_PERCENT;
 STATIC BOOL_T s_motor_enabled = FALSE;
 STATIC BOOL_T s_motor_running = FALSE;
 STATIC TIMER_ID s_motor_timer_id = NULL;
 STATIC UINT8_T s_seq_index = 0;
+STATIC UINT8_T s_bug_repeat_count = 0;
+STATIC UINT8_T s_alt_phase = 0;
+STATIC UINT32_T s_alt_phase_elapsed_ms = 0;
+STATIC UINT16_T s_alt_laser_time_s = 60;
+STATIC UINT16_T s_alt_bug_time_s = 60;
 
 STATIC UINT32_T app_motor_duty_get(VOID_T)
 {
@@ -145,11 +151,123 @@ STATIC VOID_T app_motor_laser_chase_start(VOID_T)
     s_motor_running = TRUE;
 }
 
-STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
+STATIC UINT32_T app_motor_min_u32(UINT32_T a, UINT32_T b)
+{
+    return (a < b) ? a : b;
+}
+
+STATIC VOID_T app_motor_alternating_finish(VOID_T)
+{
+    app_motor_enter_sleep_mode();
+    app_state_enter_sleep();
+}
+
+STATIC VOID_T app_motor_alternating_start_bug_phase(VOID_T)
+{
+    s_alt_phase = 1;
+    s_alt_phase_elapsed_ms = 0;
+    s_seq_index = 0;
+    s_bug_repeat_count = 0;
+}
+
+STATIC VOID_T app_motor_advance_bug_step(VOID_T)
+{
+    if (s_seq_index == 0) {
+        s_seq_index = 1;
+        return;
+    }
+    if (s_seq_index == 1) {
+        s_seq_index = 2;
+        return;
+    }
+    if (s_seq_index == 2) {
+        s_bug_repeat_count++;
+        if (s_bug_repeat_count >= BUG_PULL_REPEAT_COUNT) {
+            s_bug_repeat_count = 0;
+            s_seq_index = 3;
+        } else {
+            s_seq_index = 0;
+        }
+        return;
+    }
+    if (s_seq_index == 3) {
+        s_seq_index = 4;
+        return;
+    }
+    if (s_seq_index == 4) {
+        s_seq_index = 5;
+        return;
+    }
+    if (s_seq_index == 5) {
+        s_seq_index = 6;
+        return;
+    }
+
+    if (s_seq_index == 6) {
+        s_bug_repeat_count++;
+        if (s_bug_repeat_count >= BUG_PULL_REPEAT_COUNT) {
+            s_bug_repeat_count = 0;
+            s_seq_index = 7;
+        } else {
+            s_seq_index = 4;
+        }
+        return;
+    }
+
+    s_seq_index = 0;
+}
+
+STATIC UINT16_T app_motor_bug_tick(VOID_T)
 {
     const motor_step_t *step;
-    UINT8_T step_count;
 
+    step = &s_bug_seq[s_seq_index];
+    app_motor_apply_step(step);
+    app_motor_advance_bug_step();
+    return step->duration_ms;
+}
+
+STATIC VOID_T app_motor_alternating_handler(VOID_T)
+{
+    UINT32_T laser_ms = (UINT32_T)s_alt_laser_time_s * 1000UL;
+    UINT32_T bug_ms = (UINT32_T)s_alt_bug_time_s * 1000UL;
+    UINT32_T remaining;
+    UINT32_T duration_ms;
+
+    if (s_alt_phase == 0) {
+        if (laser_ms == 0) {
+            app_motor_alternating_start_bug_phase();
+        } else {
+            app_motor_laser_chase_start();
+            remaining = laser_ms - s_alt_phase_elapsed_ms;
+            duration_ms = app_motor_min_u32(MOTOR_STEP_MS, remaining);
+            s_alt_phase_elapsed_ms += duration_ms;
+            if (s_alt_phase_elapsed_ms >= laser_ms) {
+                app_motor_alternating_start_bug_phase();
+            }
+            tal_sw_timer_start(s_motor_timer_id, duration_ms, TAL_TIMER_ONCE);
+            return;
+        }
+    }
+
+    if (bug_ms == 0) {
+        app_motor_alternating_finish();
+        return;
+    }
+
+    remaining = bug_ms - s_alt_phase_elapsed_ms;
+    duration_ms = app_motor_min_u32(app_motor_bug_tick(), remaining);
+    s_alt_phase_elapsed_ms += duration_ms;
+    if (s_alt_phase_elapsed_ms >= bug_ms) {
+        app_motor_alternating_finish();
+        return;
+    }
+    tal_sw_timer_start(s_motor_timer_id, duration_ms, TAL_TIMER_ONCE);
+}
+
+STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
+{
+    UINT16_T duration_ms;
     if (!s_motor_enabled || s_game_mode == GAME_MODE_SLEEP) {
         app_motor_all_stop();
         return;
@@ -160,20 +278,19 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
         return;
     }
 
-    if (s_game_mode == GAME_MODE_BUG_HUNT) {
-        step = &s_bug_seq[s_seq_index];
-        step_count = BUG_SEQ_STEPS;
-    } else {
-        step = &s_alt_seq[s_seq_index];
-        step_count = ALT_SEQ_STEPS;
+    if (s_game_mode == GAME_MODE_ALTERNATING) {
+        app_motor_alternating_handler();
+        return;
     }
 
-    app_motor_apply_step(step);
-    s_seq_index++;
-    if (s_seq_index >= step_count) {
-        s_seq_index = 0;
+    if (s_game_mode == GAME_MODE_BUG_HUNT) {
+        duration_ms = app_motor_bug_tick();
+    } else {
+        app_motor_all_stop();
+        return;
     }
-    tal_sw_timer_start(s_motor_timer_id, step->duration_ms, TAL_TIMER_ONCE);
+
+    tal_sw_timer_start(s_motor_timer_id, duration_ms, TAL_TIMER_ONCE);
 }
 
 VOID_T app_motor_init(VOID_T)
@@ -199,12 +316,17 @@ VOID_T app_motor_init(VOID_T)
     tal_gpio_init(LASER, &laser_cfg);
     tal_sw_timer_create(app_motor_timer_handler, NULL, &s_motor_timer_id);
 
-    s_game_mode = GAME_MODE_LASER_CHASE;
-    s_last_active_mode = GAME_MODE_LASER_CHASE;
+    s_game_mode = GAME_MODE_BUG_HUNT;
+    s_last_active_mode = GAME_MODE_BUG_HUNT;
     s_stepless_percent = MOTOR_STEPLESS_DEFAULT_PERCENT;
     s_motor_enabled = FALSE;
     s_motor_running = FALSE;
     s_seq_index = 0;
+    s_bug_repeat_count = 0;
+    s_alt_phase = 0;
+    s_alt_phase_elapsed_ms = 0;
+    s_alt_laser_time_s = 60;
+    s_alt_bug_time_s = 60;
     app_motor_all_stop();
 
     TAL_PR_INFO("[motor] laser bug initialized");
@@ -221,6 +343,9 @@ VOID_T app_motor_set_mode(game_mode_t mode)
         s_last_active_mode = mode;
     }
     s_seq_index = 0;
+    s_bug_repeat_count = 0;
+    s_alt_phase = 0;
+    s_alt_phase_elapsed_ms = 0;
     if (s_motor_enabled) {
         app_motor_timer_handler(s_motor_timer_id, NULL);
     }
@@ -234,13 +359,16 @@ game_mode_t app_motor_get_mode(VOID_T)
 
 game_mode_t app_motor_get_report_mode(VOID_T)
 {
-    return s_game_mode;
+    return (s_game_mode == GAME_MODE_SLEEP) ? s_last_active_mode : s_game_mode;
 }
 
 VOID_T app_motor_enter_sleep_mode(VOID_T)
 {
     s_game_mode = GAME_MODE_SLEEP;
     s_seq_index = 0;
+    s_bug_repeat_count = 0;
+    s_alt_phase = 0;
+    s_alt_phase_elapsed_ms = 0;
 }
 
 VOID_T app_motor_wake_last_mode(VOID_T)
@@ -248,6 +376,9 @@ VOID_T app_motor_wake_last_mode(VOID_T)
     if (s_game_mode == GAME_MODE_SLEEP) {
         s_game_mode = s_last_active_mode;
         s_seq_index = 0;
+        s_bug_repeat_count = 0;
+        s_alt_phase = 0;
+        s_alt_phase_elapsed_ms = 0;
     }
 }
 
@@ -269,6 +400,54 @@ UINT8_T app_motor_get_stepless_percent(VOID_T)
     return s_stepless_percent;
 }
 
+VOID_T app_motor_set_alt_laser_time(UINT16_T seconds)
+{
+    if (seconds > 180) {
+        seconds = 180;
+    }
+    s_alt_laser_time_s = seconds;
+    if (s_motor_enabled && s_game_mode == GAME_MODE_ALTERNATING) {
+        s_alt_phase = 0;
+        s_alt_phase_elapsed_ms = 0;
+        s_seq_index = 0;
+        s_bug_repeat_count = 0;
+        app_motor_timer_handler(s_motor_timer_id, NULL);
+    }
+}
+
+UINT16_T app_motor_get_alt_laser_time(VOID_T)
+{
+    return s_alt_laser_time_s;
+}
+
+VOID_T app_motor_set_alt_bug_time(UINT16_T seconds)
+{
+    if (seconds > 180) {
+        seconds = 180;
+    }
+    s_alt_bug_time_s = seconds;
+    if (s_motor_enabled && s_game_mode == GAME_MODE_ALTERNATING) {
+        s_alt_phase = 0;
+        s_alt_phase_elapsed_ms = 0;
+        s_seq_index = 0;
+        s_bug_repeat_count = 0;
+        app_motor_timer_handler(s_motor_timer_id, NULL);
+    }
+}
+
+UINT16_T app_motor_get_alt_bug_time(VOID_T)
+{
+    return s_alt_bug_time_s;
+}
+
+UINT32_T app_motor_get_mode_timeout_ms(VOID_T)
+{
+    if (s_game_mode == GAME_MODE_ALTERNATING) {
+        return ((UINT32_T)s_alt_laser_time_s + (UINT32_T)s_alt_bug_time_s) * 1000UL;
+    }
+    return WORK_PERIOD_MS;
+}
+
 VOID_T app_motor_start(VOID_T)
 {
     if (s_motor_enabled) {
@@ -277,6 +456,9 @@ VOID_T app_motor_start(VOID_T)
 
     s_motor_enabled = TRUE;
     s_seq_index = 0;
+    s_bug_repeat_count = 0;
+    s_alt_phase = 0;
+    s_alt_phase_elapsed_ms = 0;
     app_motor_timer_handler(s_motor_timer_id, NULL);
 }
 

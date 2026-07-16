@@ -68,13 +68,15 @@ STATIC VOID_T app_state_set(dev_state_t new_state)
     app_state_notify_run_if_needed();
 }
 
-STATIC VOID_T app_state_start_work_timer(VOID_T)
+STATIC VOID_T app_state_start_work_timer(UINT32_T timeout_ms)
 {
     if (s_work_timer_id == NULL) {
         return;
     }
     tal_sw_timer_stop(s_work_timer_id);
-    tal_sw_timer_start(s_work_timer_id, WORK_PERIOD_MS, TAL_TIMER_ONCE);
+    if (timeout_ms > 0) {
+        tal_sw_timer_start(s_work_timer_id, timeout_ms, TAL_TIMER_ONCE);
+    }
 }
 
 STATIC VOID_T app_state_stop_cycle_timers(VOID_T)
@@ -104,7 +106,7 @@ VOID_T app_state_init(VOID_T)
     s_low_voltage_lock = FALSE;
     s_run_active = FALSE;
     s_dev_state = DEV_STATE_WORK;
-    app_state_start_work_timer();
+    app_state_start_work_timer(WORK_PERIOD_MS);
 
     TAL_PR_INFO("[state] initialized");
 }
@@ -134,7 +136,7 @@ BOOL_T app_state_set_power(BOOL_T on)
             s_machine_on_cb();
         }
         app_state_set(DEV_STATE_WORK);
-        app_state_start_work_timer();
+        app_state_start_work_timer(WORK_PERIOD_MS);
     } else {
         app_state_stop_cycle_timers();
         app_state_notify_run_if_needed();
@@ -163,7 +165,7 @@ BOOL_T app_state_set_app_power(BOOL_T on)
 
     if (s_app_powered && s_machine_powered && !s_low_voltage_lock) {
         app_state_set(DEV_STATE_WORK);
-        app_state_start_work_timer();
+        app_state_start_work_timer(WORK_PERIOD_MS);
     } else {
         app_state_stop_cycle_timers();
         app_state_notify_run_if_needed();
@@ -214,7 +216,7 @@ VOID_T app_state_set_low_voltage_lock(BOOL_T locked)
         app_state_stop_cycle_timers();
     } else if (s_machine_powered && s_app_powered) {
         app_state_set(DEV_STATE_WORK);
-        app_state_start_work_timer();
+        app_state_start_work_timer(WORK_PERIOD_MS);
     }
     app_state_notify_run_if_needed();
 }
@@ -230,7 +232,16 @@ VOID_T app_state_reset_work_cycle(VOID_T)
         return;
     }
     app_state_set(DEV_STATE_WORK);
-    app_state_start_work_timer();
+    app_state_start_work_timer(WORK_PERIOD_MS);
+}
+
+VOID_T app_state_reset_work_cycle_for(UINT32_T timeout_ms)
+{
+    if (!s_machine_powered || !s_app_powered || s_low_voltage_lock) {
+        return;
+    }
+    app_state_set(DEV_STATE_WORK);
+    app_state_start_work_timer(timeout_ms);
 }
 
 VOID_T app_state_enter_sleep(VOID_T)

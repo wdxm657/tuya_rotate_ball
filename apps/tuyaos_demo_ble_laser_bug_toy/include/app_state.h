@@ -42,6 +42,7 @@ VOID_T app_state_set_low_voltage_lock(BOOL_T locked);
 BOOL_T app_state_is_low_voltage_locked(VOID_T);
 
 VOID_T app_state_reset_work_cycle(VOID_T);
+VOID_T app_state_reset_work_cycle_for(UINT32_T timeout_ms);
 VOID_T app_state_enter_sleep(VOID_T);
 VOID_T app_state_process(VOID_T);
 UINT8_T app_state_get_dp_enum(VOID_T);

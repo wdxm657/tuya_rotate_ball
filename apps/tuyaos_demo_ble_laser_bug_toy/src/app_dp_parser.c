@@ -36,6 +36,17 @@ STATIC UINT32_T app_dp_get_value(UINT8_T *buf)
            ((UINT32_T)buf[3]);
 }
 
+STATIC VOID_T app_dp_reset_state_for_mode(VOID_T)
+{
+    UINT32_T timeout_ms = app_motor_get_mode_timeout_ms();
+
+    if (app_motor_get_mode() == GAME_MODE_ALTERNATING && timeout_ms == 0) {
+        app_state_enter_sleep();
+    } else {
+        app_state_reset_work_cycle_for(timeout_ms);
+    }
+}
+
 OPERATE_RET app_dp_parser(UINT8_T *buf, UINT32_T size)
 {
     if (buf == NULL || size < 4 || size > SIZEOF(g_cmd)) {
@@ -55,12 +66,38 @@ OPERATE_RET app_dp_parser(UINT8_T *buf, UINT32_T size)
         break;
     case DP_ID_MODE:
         app_motor_set_mode((game_mode_t)g_cmd.dp_data[0]);
-        if ((game_mode_t)g_cmd.dp_data[0] == GAME_MODE_SLEEP) {
-            app_state_enter_sleep();
-        } else {
-            app_state_reset_work_cycle();
-        }
+        app_dp_reset_state_for_mode();
         break;
+    case DP_ID_ALT_LASER_TIME: {
+        UINT32_T seconds;
+
+        if (g_cmd.dp_data_len < DT_VALUE_LEN) {
+            return OPRT_INVALID_PARM;
+        }
+        seconds = app_dp_get_value(g_cmd.dp_data);
+        if (seconds > 180) {
+            seconds = 180;
+        }
+        app_dp_set_value(g_cmd.dp_data, seconds);
+        app_motor_set_alt_laser_time((UINT16_T)seconds);
+        app_dp_reset_state_for_mode();
+        break;
+    }
+    case DP_ID_ALT_BUG_TIME: {
+        UINT32_T seconds;
+
+        if (g_cmd.dp_data_len < DT_VALUE_LEN) {
+            return OPRT_INVALID_PARM;
+        }
+        seconds = app_dp_get_value(g_cmd.dp_data);
+        if (seconds > 180) {
+            seconds = 180;
+        }
+        app_dp_set_value(g_cmd.dp_data, seconds);
+        app_motor_set_alt_bug_time((UINT16_T)seconds);
+        app_dp_reset_state_for_mode();
+        break;
+    }
     case DP_ID_STEPLESS_CONTROL: {
         UINT32_T percent;
 
@@ -103,6 +140,8 @@ OPERATE_RET app_dp_report(UINT8_T dp_id, UINT8_T *buf, UINT32_T size)
         memcpy(g_rsp.dp_data, buf, DT_ENUM_LEN);
         break;
     case DP_ID_BATTERY:
+    case DP_ID_ALT_LASER_TIME:
+    case DP_ID_ALT_BUG_TIME:
     case DP_ID_STEPLESS_CONTROL:
         g_rsp.dp_type = DT_VALUE;
         g_rsp.dp_data_len = DT_VALUE_LEN;
@@ -135,6 +174,12 @@ VOID_T app_dp_report_all(VOID_T)
 
     app_dp_set_value(value_buf, app_battery_get_percent());
     app_dp_report(DP_ID_BATTERY, value_buf, DT_VALUE_LEN);
+
+    app_dp_set_value(value_buf, app_motor_get_alt_laser_time());
+    app_dp_report(DP_ID_ALT_LASER_TIME, value_buf, DT_VALUE_LEN);
+
+    app_dp_set_value(value_buf, app_motor_get_alt_bug_time());
+    app_dp_report(DP_ID_ALT_BUG_TIME, value_buf, DT_VALUE_LEN);
 
     app_dp_set_value(value_buf, app_motor_get_stepless_percent());
     app_dp_report(DP_ID_STEPLESS_CONTROL, value_buf, DT_VALUE_LEN);
