@@ -23,7 +23,7 @@
 #define BUG_PULL_BOOST_PERCENT 30
 #define MOTOR_DUTY_MIN_PERCENT 25
 #define MOTOR_DUTY_MAX_PERCENT 60
-#define MOTOR_DUTY_DEFAULT_PERCENT 42.5
+#define MOTOR_DUTY_DEFAULT_PERCENT 32
 #define MOTOR_STEPLESS_DEFAULT_PERCENT \
     (((MOTOR_DUTY_DEFAULT_PERCENT - MOTOR_DUTY_MIN_PERCENT) * 100) / \
      (MOTOR_DUTY_MAX_PERCENT - MOTOR_DUTY_MIN_PERCENT))
@@ -149,7 +149,7 @@ STATIC VOID_T app_motor_apply_step(const motor_step_t *step)
 
 STATIC VOID_T app_motor_laser_chase_start(VOID_T)
 {
-    UINT32_T duty = app_motor_duty_get();
+    UINT32_T duty = app_motor_duty_get() - 8 * MOTOR_PWM_DUTY_1;
 
     app_motor_pair_set(MOTOR_FOR_1, MOTOR_REV_1, MOTOR_DIR_STOP, MOTOR_PWM_DUTY_0);
     app_motor_pair_set(MOTOR_FOR_2, MOTOR_REV_2, MOTOR_DIR_STOP, MOTOR_PWM_DUTY_0);
@@ -300,12 +300,19 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
 
 VOID_T app_motor_init(VOID_T)
 {
-    TUYA_PWM_BASE_CFG_T pwm_cfg = {
+    TUYA_PWM_BASE_CFG_T pwm_cfg_m12 = {
         .polarity = TUYA_PWM_POSITIVE,
         .count_mode = TUYA_PWM_CNT_UP,
         .duty = 0,
         .cycle = 100,
         .frequency = MOTOR_PWM_FREQ_HZ,
+    };
+    TUYA_PWM_BASE_CFG_T pwm_cfg_m3 = {
+        .polarity = TUYA_PWM_POSITIVE,
+        .count_mode = TUYA_PWM_CNT_UP,
+        .duty = 0,
+        .cycle = 100,
+        .frequency = MOTOR_PWM_FREQ_HZ_M3,
     };
     TUYA_GPIO_BASE_CFG_T laser_cfg = {
         .mode = TUYA_GPIO_PUSH_PULL,
@@ -313,11 +320,11 @@ VOID_T app_motor_init(VOID_T)
         .level = TUYA_GPIO_LEVEL_LOW,
     };
 
-    tal_pwm_init(MOTOR_FOR_1, &pwm_cfg);
-    tal_pwm_init(MOTOR_REV_1, &pwm_cfg);
-    tal_pwm_init(MOTOR_FOR_2, &pwm_cfg);
-    tal_pwm_init(MOTOR_REV_2, &pwm_cfg);
-    tal_pwm_init(MOTOR_3, &pwm_cfg);
+    tal_pwm_init(MOTOR_FOR_1, &pwm_cfg_m12);
+    tal_pwm_init(MOTOR_REV_1, &pwm_cfg_m12);
+    tal_pwm_init(MOTOR_FOR_2, &pwm_cfg_m12);
+    tal_pwm_init(MOTOR_REV_2, &pwm_cfg_m12);
+    tal_pwm_init(MOTOR_3, &pwm_cfg_m3);
     tal_gpio_init(LASER, &laser_cfg);
     tal_sw_timer_create(app_motor_timer_handler, NULL, &s_motor_timer_id);
 

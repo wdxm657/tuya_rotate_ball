@@ -18,6 +18,7 @@ extern "C" {
 #define MOTOR_DIR_REVERSE   2
 
 #define MOTOR_PWM_FREQ_HZ   25000
+#define MOTOR_PWM_FREQ_HZ_M3 100
 
 /* tal_pwm_duty_set() on TLSR825x uses 0~1000000, independent of cfg.cycle. */
 #define MOTOR_PWM_DUTY_0    0U
