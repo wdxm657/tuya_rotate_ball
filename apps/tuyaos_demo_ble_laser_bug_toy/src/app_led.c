@@ -37,7 +37,6 @@ STATIC BOOL_T app_led_mode_blinks(led_mode_t mode)
 
 STATIC VOID_T app_led_apply(VOID_T)
 {
-    TAL_PR_DEBUG("status_mode %d %d", s_status_mode, s_blink_on);
     switch (s_status_mode) {
     case LED_MODE_BLUE_SOLID:
         app_led_write(LED_R, FALSE);
