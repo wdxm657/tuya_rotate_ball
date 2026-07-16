@@ -466,11 +466,11 @@ OPERATE_RET tuya_init_third(VOID_T)
     TUYA_GPIO_BASE_CFG_T pir_con_cfg = {
         .mode = TUYA_GPIO_PUSH_PULL,
         .direct = TUYA_GPIO_OUTPUT,
-        .level = TUYA_GPIO_LEVEL_HIGH,
+        .level = TUYA_GPIO_LEVEL_LOW,
     };
     tal_gpio_init(PIR, &pir_input_cfg);
     tal_gpio_init(PIR_CON, &pir_con_cfg);
-    tal_gpio_write(PIR_CON, TUYA_GPIO_LEVEL_HIGH);
+    tal_gpio_write(PIR_CON, TUYA_GPIO_LEVEL_LOW);
 
     /* ---- 模块初始化 ---- */
     /* 1. 状态机（须在其他模块之前初始化） */

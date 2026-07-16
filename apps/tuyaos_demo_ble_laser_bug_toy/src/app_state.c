@@ -255,7 +255,7 @@ VOID_T app_state_enter_sleep(VOID_T)
 
 VOID_T app_state_process(VOID_T)
 {
-    TUYA_GPIO_LEVEL_E level = TUYA_GPIO_LEVEL_HIGH;
+    TUYA_GPIO_LEVEL_E level = TUYA_GPIO_LEVEL_LOW;
 
     if (s_dev_state != DEV_STATE_SLEEP || !s_machine_powered || !s_app_powered || s_low_voltage_lock) {
         return;
@@ -265,7 +265,8 @@ VOID_T app_state_process(VOID_T)
         return;
     }
 
-    if (level == TUYA_GPIO_LEVEL_LOW) {
+    
+    if (level == TUYA_GPIO_LEVEL_HIGH) {
         TAL_PR_INFO("[state] PIR wake");
         app_state_reset_work_cycle();
     }
@@ -273,13 +274,22 @@ VOID_T app_state_process(VOID_T)
 
 UINT8_T app_state_get_dp_enum(VOID_T)
 {
-    if (s_charge_done) {
-        return (UINT8_T)DEV_STATE_CHARGE_DONE;
+    if (s_app_powered)
+    {
+        return app_state_should_run() ? (UINT8_T)DEV_STATE_WORK : (UINT8_T)DEV_STATE_STANDBY;
     }
-    if (s_charging) {
-        return (UINT8_T)DEV_STATE_CHARGING;
-    }
-    return app_state_should_run() ? (UINT8_T)DEV_STATE_WORK : (UINT8_T)DEV_STATE_STANDBY;
+    else{
+        if (s_charge_done || s_charging)
+        {
+            if (s_charge_done) {
+                return (UINT8_T)DEV_STATE_CHARGE_DONE;
+            }
+            if (s_charging) {
+                return (UINT8_T)DEV_STATE_CHARGING;
+            }
+        }
+        return app_state_should_run() ? (UINT8_T)DEV_STATE_WORK : (UINT8_T)DEV_STATE_STANDBY;
+    }    
 }
 
 VOID_T app_state_register_change_cb(VOID_T (*cb)(dev_state_t, dev_state_t))
