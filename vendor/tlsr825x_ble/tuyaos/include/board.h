@@ -80,8 +80,8 @@ extern unsigned int ota_program_offset;
 // #define BOARD_FLASH_MAC_START_ADDR              (0)
 // #endif
 #define APP_DATA_FLASH_ADDR 0x7F000
-#define LASER_BUG 0
-#define CAT_STRING 1
+#define LASER_BUG 1
+#define CAT_STRING 0
 #define BLE_BALL 0
 
 #if LASER_BUG
