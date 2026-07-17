@@ -50,6 +50,7 @@ UINT8_T app_state_get_dp_enum(VOID_T);
 VOID_T app_state_register_change_cb(VOID_T (*cb)(dev_state_t old_state, dev_state_t new_state));
 VOID_T app_state_register_power_cb(VOID_T (*on_cb)(VOID_T), VOID_T (*off_cb)(VOID_T));
 VOID_T app_state_register_machine_power_cb(VOID_T (*on_cb)(VOID_T), VOID_T (*off_cb)(VOID_T));
+VOID_T app_state_register_pre_sleep_cb(BOOL_T (*cb)(VOID_T));
 
 #ifdef __cplusplus
 }

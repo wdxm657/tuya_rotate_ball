@@ -25,6 +25,7 @@
 
 #include "app_battery.h"
 #include "app_state.h"
+#include "app_led.h"
 
 /***********************************************************************
  ********************* static variable *********************************
@@ -195,6 +196,7 @@ STATIC VOID_T app_battery_monitor_handler(TIMER_ID timer_id, VOID_T *arg)
     UINT8_T percent;
     UINT8_T filtered_percent;
     BOOL_T charging_or_full;
+    BOOL_T old_battery_low = s_battery_low;
 
     /* 采样 */
     if (app_battery_sample(&vol_mv) != OPRT_OK) {
@@ -262,6 +264,9 @@ STATIC VOID_T app_battery_monitor_handler(TIMER_ID timer_id, VOID_T *arg)
         }
     } else {
         s_battery_low = FALSE;
+    }
+    if (old_battery_low != s_battery_low) {
+        app_led_update();
     }
 
     /* ----- 临界低电保护 ----- */

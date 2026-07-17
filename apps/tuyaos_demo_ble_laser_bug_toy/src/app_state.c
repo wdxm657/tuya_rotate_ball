@@ -24,6 +24,7 @@ STATIC VOID_T (*s_run_on_cb)(VOID_T) = NULL;
 STATIC VOID_T (*s_run_off_cb)(VOID_T) = NULL;
 STATIC VOID_T (*s_machine_on_cb)(VOID_T) = NULL;
 STATIC VOID_T (*s_machine_off_cb)(VOID_T) = NULL;
+STATIC BOOL_T (*s_pre_sleep_cb)(VOID_T) = NULL;
 
 STATIC BOOL_T app_state_should_run(VOID_T)
 {
@@ -89,6 +90,9 @@ STATIC VOID_T app_state_stop_cycle_timers(VOID_T)
 STATIC VOID_T app_state_work_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
 {
     if (!s_machine_powered || !s_app_powered || s_low_voltage_lock) {
+        return;
+    }
+    if (s_pre_sleep_cb != NULL && !s_pre_sleep_cb()) {
         return;
     }
 
@@ -249,6 +253,9 @@ VOID_T app_state_enter_sleep(VOID_T)
     if (!s_machine_powered || !s_app_powered || s_low_voltage_lock) {
         return;
     }
+    if (s_pre_sleep_cb != NULL && !s_pre_sleep_cb()) {
+        return;
+    }
     app_state_stop_cycle_timers();
     app_state_set(DEV_STATE_SLEEP);
 }
@@ -308,4 +315,9 @@ VOID_T app_state_register_machine_power_cb(VOID_T (*on_cb)(VOID_T), VOID_T (*off
 {
     s_machine_on_cb = on_cb;
     s_machine_off_cb = off_cb;
+}
+
+VOID_T app_state_register_pre_sleep_cb(BOOL_T (*cb)(VOID_T))
+{
+    s_pre_sleep_cb = cb;
 }
