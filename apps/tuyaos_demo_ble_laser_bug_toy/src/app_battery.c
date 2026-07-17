@@ -45,9 +45,9 @@ STATIC UINT8_T  s_cached_percent = 50;    /**< 最近一次有效百分比 % */
 STATIC BOOL_T   s_battery_low      = FALSE;
 STATIC BOOL_T   s_battery_critical = FALSE;
 
-/* 变化速率预算：0.1% 单位，最大 10 (即 1%) */
-#define PCT_BUDGET_MAX      10
-#define PCT_BUDGET_PER_TICK 1       /* 每 tick (1s) 增加 0.1% */
+#define PCT_BUDGET_MAX      60 // s
+/* 变化速率预算：1% 单位*/
+#define PCT_BUDGET_PER_TICK 1       /* 每 tick (1s) 增加 1% */
 
 STATIC UINT8_T s_pct_budget = PCT_BUDGET_MAX;
 
@@ -86,10 +86,10 @@ STATIC CONST struct {
     {3640,  30},
     {3600,  25},
     {3560,  20},
-    {3500,  15},
-    {3400,  10},
-    {3250,   5},
-    {3000,   0},
+    {3500,  10},
+    {3400,  5},
+    {3250,   0},
+    // {3000,   0},
 };
 #define BATTERY_LUT_SIZE  (sizeof(s_battery_lut) / sizeof(s_battery_lut[0]))
 
@@ -177,7 +177,7 @@ STATIC OPERATE_RET app_battery_sample(INT32_T *vol_mv)
 
     /* 计算平均值 → 换算电压 */
     INT32_T adc_avg = raw_sum / (INT32_T)valid_cnt;
-    *vol_mv = adc_avg * BATTERY_DIVIDER_RATIO;
+    *vol_mv = adc_avg * BATTERY_DIVIDER_RATIO + 40;
 
     return OPRT_OK;
 }
@@ -215,7 +215,7 @@ STATIC VOID_T app_battery_monitor_handler(TIMER_ID timer_id, VOID_T *arg)
         filtered_percent = s_cached_percent;
     }
 
-    /* 变化速率约束：最多每 10 秒变化 1%（0.1%/tick, timer=1000ms） */
+    /* 变化速率约束：最多每 PCT_BUDGET_MAX 秒变化 1% */
     if (s_pct_budget < PCT_BUDGET_MAX) {
         s_pct_budget += PCT_BUDGET_PER_TICK;
     }
@@ -223,10 +223,10 @@ STATIC VOID_T app_battery_monitor_handler(TIMER_ID timer_id, VOID_T *arg)
     if (filtered_percent > s_cached_percent) {
         /* 上升：限制爬升速率 — 只消耗实际变化量 */
         UINT8_T diff = filtered_percent - s_cached_percent;
-        UINT8_T allowed = s_pct_budget / 10;
+        UINT8_T allowed = s_pct_budget / PCT_BUDGET_MAX;
         UINT8_T actual = (diff > allowed) ? allowed : diff;
         filtered_percent = s_cached_percent + actual;
-        UINT32_T used = (UINT32_T)actual * 10U;
+        UINT32_T used = (UINT32_T)actual * PCT_BUDGET_MAX;
         if (used >= s_pct_budget) {
             s_pct_budget = 0;
         } else {
@@ -235,10 +235,10 @@ STATIC VOID_T app_battery_monitor_handler(TIMER_ID timer_id, VOID_T *arg)
     } else if (filtered_percent < s_cached_percent) {
         /* 下降：限制跌落速率 — 只消耗实际变化量 */
         UINT8_T diff = s_cached_percent - filtered_percent;
-        UINT8_T allowed = s_pct_budget / 10;
+        UINT8_T allowed = s_pct_budget / PCT_BUDGET_MAX;
         UINT8_T actual = (diff > allowed) ? allowed : diff;
         filtered_percent = s_cached_percent - actual;
-        UINT32_T used = (UINT32_T)actual * 10U;
+        UINT32_T used = (UINT32_T)actual * PCT_BUDGET_MAX;
         if (used >= s_pct_budget) {
             s_pct_budget = 0;
         } else {
@@ -248,10 +248,10 @@ STATIC VOID_T app_battery_monitor_handler(TIMER_ID timer_id, VOID_T *arg)
 
     /* 更新缓存 */
     s_cached_voltage = vol_mv;
-    if (s_cached_percent != filtered_percent) {
+    // if (s_cached_percent != filtered_percent) {
         TAL_PR_INFO("[battery] sample: %dmV -> %d%% (raw=%d%%, charge=%d)",
                     vol_mv, filtered_percent, percent, app_state_is_charging());
-    }
+    // }
     
     s_cached_percent = filtered_percent;
 

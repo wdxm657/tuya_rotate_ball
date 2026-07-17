@@ -124,7 +124,8 @@ STATIC VOID_T led_on_state_change(dev_state_t old_state, dev_state_t new_state)
  */
 STATIC VOID_T battery_critical_poweroff(VOID_T)
 {
-    app_state_set_low_voltage_lock(TRUE);
+    app_state_toggle_power();
+    // app_state_set_low_voltage_lock(TRUE);
 }
 
 /***********************************************************************
