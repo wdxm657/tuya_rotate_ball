@@ -163,7 +163,7 @@ STATIC VOID_T app_motor_apply_step(const motor_step_t *step)
 
 STATIC VOID_T app_motor_laser_chase_start(VOID_T)
 {
-    UINT32_T duty = app_motor_duty_get() - 3 * MOTOR_PWM_DUTY_1;
+    UINT32_T duty = app_motor_duty_get() - 0 * MOTOR_PWM_DUTY_1;
 
     app_motor_pair_set(MOTOR_FOR_1, MOTOR_REV_1, MOTOR_DIR_STOP, MOTOR_PWM_DUTY_0);
     app_motor_pair_set(MOTOR_FOR_2, MOTOR_REV_2, MOTOR_DIR_STOP, MOTOR_PWM_DUTY_0);
