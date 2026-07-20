@@ -473,6 +473,7 @@ STATIC VOID_T machine_power_off_cb(VOID_T)
 {
     app_battery_suspend();
     app_led_update();
+    app_led_prepare_sleep();
     TAL_PR_DEBUG("INTO LOW POWER");
     tal_cpu_allow_sleep();
 }
@@ -480,7 +481,7 @@ STATIC VOID_T machine_power_off_cb(VOID_T)
 STATIC VOID_T machine_power_on_cb(VOID_T)
 {
     app_battery_resume();
-    app_led_update();
+    app_led_resume();
 }
 
 OPERATE_RET tuya_init_last(VOID_T)

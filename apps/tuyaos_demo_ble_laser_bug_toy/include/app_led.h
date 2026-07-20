@@ -24,6 +24,8 @@ typedef enum {
 VOID_T app_led_init(VOID_T);
 VOID_T app_led_set_mode(led_mode_t mode);
 VOID_T app_led_update(VOID_T);
+VOID_T app_led_prepare_sleep(VOID_T);
+VOID_T app_led_resume(VOID_T);
 led_mode_t app_led_get_mode(VOID_T);
 
 #ifdef __cplusplus

@@ -16,11 +16,13 @@
 #define VARIABLE_SEQ_STEPS 3
 #define FIXED_SEQ_STEPS (sizeof(s_fixed_seq) / sizeof(s_fixed_seq[0]))
 #define VARIABLE_SEQ_CYCLES 5
-#define RANDOM_BURST_MS 3000
+#define RANDOM_BURST_MS 6000
+#define RANDOM_BURST_RAMP_STEPS 12
+#define RANDOM_BURST_STEP_MS (RANDOM_BURST_MS / RANDOM_BURST_RAMP_STEPS)
 #define RANDOM_STOP_MS 2000
-#define MOTOR_DUTY_MIN_PERCENT 60
+#define MOTOR_DUTY_MIN_PERCENT 50
 #define MOTOR_DUTY_MAX_PERCENT 100
-#define MOTOR_DUTY_DEFAULT_PERCENT 80
+#define MOTOR_DUTY_DEFAULT_PERCENT 75
 #define MOTOR_STEPLESS_DEFAULT_PERCENT \
     (((MOTOR_DUTY_DEFAULT_PERCENT - MOTOR_DUTY_MIN_PERCENT) * 100) / \
      (MOTOR_DUTY_MAX_PERCENT - MOTOR_DUTY_MIN_PERCENT))
@@ -43,6 +45,8 @@ STATIC UINT8_T s_var_seq_cycle_count = 0;
 
 STATIC UINT8_T s_var_rand_seed = 0;
 STATIC UINT8_T s_var_burst_idx = 0;
+STATIC UINT8_T s_var_burst_step = 0;
+STATIC UINT8_T s_var_burst_dir = MOTOR_DIR_STOP;
 STATIC UINT8_T s_current_direction = MOTOR_DIR_STOP;
 
 typedef enum
@@ -209,19 +213,25 @@ STATIC VOID_T app_motor_set_direction(UINT8_T direction, UINT32_T duty)
 
 STATIC VOID_T app_motor_report_stepless_percent(VOID_T);
 
-STATIC UINT8_T app_motor_next_random_duty_percent(VOID_T)
+STATIC UINT8_T app_motor_random_burst_duty_percent(VOID_T)
 {
-    s_var_rand_seed = (s_var_rand_seed * 13U + 7U) & 0xFFU;
-    return (UINT8_T)(MOTOR_DUTY_MIN_PERCENT +
-                     (s_var_rand_seed % (MOTOR_DUTY_MAX_PERCENT - MOTOR_DUTY_MIN_PERCENT + 1)));
+    UINT16_T min = MOTOR_DUTY_MIN_PERCENT + 10;
+    UINT32_T range = MOTOR_DUTY_MAX_PERCENT - min;
+
+    if (s_var_burst_step >= RANDOM_BURST_RAMP_STEPS - 1U) {
+        return MOTOR_DUTY_MAX_PERCENT;
+    }
+
+    return (UINT8_T)(min +
+                     (range * s_var_burst_step) / (RANDOM_BURST_RAMP_STEPS - 1U));
 }
 
-STATIC VOID_T app_motor_use_random_duty(VOID_T)
+STATIC VOID_T app_motor_start_random_burst_step(VOID_T)
 {
-    s_random_duty_active = TRUE;
-    s_stepless_percent = app_motor_next_random_duty_percent();
-    TAL_PR_INFO("[motor] random duty percent=%d", s_stepless_percent);
-    app_motor_report_stepless_percent();
+    UINT8_T duty_percent = app_motor_random_burst_duty_percent();
+
+    app_motor_set_direction(s_var_burst_dir, (UINT32_T)duty_percent * MOTOR_PWM_DUTY_1);
+    s_var_burst_step++;
 }
 
 STATIC VOID_T app_motor_restore_app_duty(VOID_T)
@@ -273,14 +283,15 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
             s_var_seq_cycle_count++;
             if (s_var_seq_cycle_count >= VARIABLE_SEQ_CYCLES)
             {
-                /* 5 次循环结束 → 随机方向 3s 爆发 */
+                /* 5 次循环结束 → 随机方向 6s 爆发 */
                 s_var_substate = VAR_SUB_RANDOM;
                 s_var_seq_cycle_count = 0;
                 const motor_burst_step_t *burst = &s_rand_burst_seq[s_var_burst_idx];
-                // app_motor_use_random_duty();
-                app_motor_set_direction(burst->dir,app_motor_next_random_duty_percent() * MOTOR_PWM_DUTY_1);
+                s_var_burst_dir = burst->dir;
+                s_var_burst_step = 0;
+                app_motor_start_random_burst_step();
                 s_var_burst_idx = (s_var_burst_idx + 1U) % BURST_SEQ_SIZE;
-                tal_sw_timer_start(s_motor_timer_id, RANDOM_BURST_MS, TAL_TIMER_ONCE);
+                tal_sw_timer_start(s_motor_timer_id, RANDOM_BURST_STEP_MS, TAL_TIMER_ONCE);
                 return;
             }
         }
@@ -288,7 +299,14 @@ STATIC VOID_T app_motor_timer_handler(TIMER_ID timer_id, VOID_T *arg)
     }
     else if (s_var_substate == VAR_SUB_RANDOM)
     {
-        /* VAR_SUB_RANDOM：3s 爆发结束，停止 2s 后再切回 seq 循环 */
+        if (s_var_burst_step < RANDOM_BURST_RAMP_STEPS)
+        {
+            app_motor_start_random_burst_step();
+            tal_sw_timer_start(s_motor_timer_id, RANDOM_BURST_STEP_MS, TAL_TIMER_ONCE);
+            return;
+        }
+
+        /* VAR_SUB_RANDOM：6s 线性爆发结束，停止 2s 后再切回 seq 循环 */
         s_var_substate = VAR_SUB_STOP;
         app_motor_set_direction(MOTOR_DIR_STOP,NULL);
         tal_sw_timer_start(s_motor_timer_id, RANDOM_STOP_MS, TAL_TIMER_ONCE);
@@ -332,6 +350,8 @@ VOID_T app_motor_init(VOID_T)
     s_var_seq_cycle_count = 0;
     s_var_rand_seed = 0;
     s_var_burst_idx = 0;
+    s_var_burst_step = 0;
+    s_var_burst_dir = MOTOR_DIR_STOP;
     s_current_direction = MOTOR_DIR_STOP;
 
     TAL_PR_INFO("[motor] initialized");
@@ -348,6 +368,8 @@ VOID_T app_motor_set_mode(work_mode_t mode)
     s_seq_index = 0;
     s_var_substate = VAR_SUB_SEQ;
     s_var_seq_cycle_count = 0;
+    s_var_burst_step = 0;
+    s_var_burst_dir = MOTOR_DIR_STOP;
     app_motor_restore_app_duty();
     s_var_rand_seed = (s_var_rand_seed * 13U + 7U) & 0xFFU;
     s_var_burst_idx = s_var_rand_seed % BURST_SEQ_SIZE;
@@ -394,6 +416,8 @@ VOID_T app_motor_start(VOID_T)
     s_seq_index = 0;
     s_var_substate = VAR_SUB_SEQ;
     s_var_seq_cycle_count = 0;
+    s_var_burst_step = 0;
+    s_var_burst_dir = MOTOR_DIR_STOP;
     app_motor_restore_app_duty();
     s_var_rand_seed = (s_var_rand_seed * 13U + 7U) & 0xFFU;
     s_var_burst_idx = s_var_rand_seed % BURST_SEQ_SIZE;

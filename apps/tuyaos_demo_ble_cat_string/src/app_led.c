@@ -25,6 +25,29 @@ STATIC VOID_T app_led_write(TUYA_GPIO_NUM_E pin, BOOL_T on)
     tal_gpio_write(pin, on);
 }
 
+STATIC VOID_T app_led_output_init(TUYA_GPIO_NUM_E pin)
+{
+    TUYA_GPIO_BASE_CFG_T gpio_cfg = {
+        .mode = TUYA_GPIO_PUSH_PULL,
+        .direct = TUYA_GPIO_OUTPUT,
+        .level = TUYA_GPIO_LEVEL_LOW,
+    };
+
+    tal_gpio_init(pin, &gpio_cfg);
+}
+
+STATIC VOID_T app_led_pulldown_input(TUYA_GPIO_NUM_E pin)
+{
+    TUYA_GPIO_BASE_CFG_T gpio_cfg = {
+        .mode = TUYA_GPIO_PULLDOWN,
+        .direct = TUYA_GPIO_INPUT,
+        .level = TUYA_GPIO_LEVEL_LOW,
+    };
+
+    tal_gpio_write(pin, TUYA_GPIO_LEVEL_LOW);
+    tal_gpio_init(pin, &gpio_cfg);
+}
+
 STATIC BOOL_T app_led_is_pairing(VOID_T)
 {
     tuya_ble_connect_status_t st = tuya_ble_connect_status_get();
@@ -100,16 +123,10 @@ STATIC VOID_T app_led_blink_handler(TIMER_ID timer_id, VOID_T *arg)
 
 VOID_T app_led_init(VOID_T)
 {
-    TUYA_GPIO_BASE_CFG_T gpio_cfg = {
-        .mode = TUYA_GPIO_PUSH_PULL,
-        .direct = TUYA_GPIO_OUTPUT,
-        .level = TUYA_GPIO_LEVEL_LOW,
-    };
-
-    tal_gpio_init(LED_B, &gpio_cfg);
-    tal_gpio_init(LED_G, &gpio_cfg);
-    tal_gpio_init(CHARGE_R, &gpio_cfg);
-    tal_gpio_init(CHARGE_G, &gpio_cfg);
+    app_led_output_init(LED_B);
+    app_led_output_init(LED_G);
+    app_led_output_init(CHARGE_R);
+    app_led_output_init(CHARGE_G);
     tal_sw_timer_create(app_led_blink_handler, NULL, &s_led_timer_id);
 
     s_status_mode = LED_MODE_OFF;
@@ -159,6 +176,33 @@ VOID_T app_led_update(VOID_T)
     s_status_mode = status_mode;
     s_power_mode = power_mode;
     app_led_restart_timer_if_needed();
+}
+
+VOID_T app_led_prepare_sleep(VOID_T)
+{
+    if (s_led_timer_id != NULL) {
+        tal_sw_timer_stop(s_led_timer_id);
+    }
+    s_status_mode = LED_MODE_OFF;
+    s_power_mode = LED_MODE_OFF;
+    s_blink_on = FALSE;
+
+    app_led_pulldown_input(LED_B);
+    app_led_pulldown_input(LED_G);
+    app_led_pulldown_input(CHARGE_R);
+    app_led_pulldown_input(CHARGE_G);
+}
+
+VOID_T app_led_resume(VOID_T)
+{
+    app_led_output_init(LED_B);
+    app_led_output_init(LED_G);
+    app_led_output_init(CHARGE_R);
+    app_led_output_init(CHARGE_G);
+    s_status_mode = LED_MODE_OFF;
+    s_power_mode = LED_MODE_OFF;
+    s_blink_on = FALSE;
+    app_led_update();
 }
 
 led_mode_t app_led_get_mode(VOID_T)

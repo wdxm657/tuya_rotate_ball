@@ -67,7 +67,6 @@ STATIC UINT8_T s_seq_index = 0;
 STATIC UINT8_T s_bug_repeat_count = 0;
 STATIC BOOL_T s_bug_pause_active = FALSE;
 STATIC BOOL_T s_sleep_pending = FALSE;
-STATIC BOOL_T s_sleep_laser_off = FALSE;
 STATIC UINT8_T s_alt_phase = 0;
 STATIC UINT32_T s_alt_phase_elapsed_ms = 0;
 STATIC UINT16_T s_alt_laser_time_s = 60;
@@ -159,13 +158,7 @@ STATIC VOID_T app_motor_all_stop(VOID_T)
 
 STATIC TUYA_GPIO_LEVEL_E app_motor_bug_laser_level(VOID_T)
 {
-    if (s_sleep_laser_off) {
-        return TUYA_GPIO_LEVEL_LOW;
-    }
-    if (s_game_mode == GAME_MODE_ALTERNATING && s_alt_phase == 1) {
-        return TUYA_GPIO_LEVEL_LOW;
-    }
-    return TUYA_GPIO_LEVEL_HIGH;
+    return TUYA_GPIO_LEVEL_LOW;
 }
 
 STATIC VOID_T app_motor_apply_step(const motor_step_t *step)
@@ -290,7 +283,6 @@ STATIC BOOL_T app_motor_pre_sleep(VOID_T)
 
     TAL_PR_DEBUG("PRE SLEEP");
     s_sleep_pending = TRUE;
-    s_sleep_laser_off = (s_game_mode == GAME_MODE_ALTERNATING);
     s_game_mode = GAME_MODE_BUG_HUNT;
     s_seq_index = BUG_SLEEP_FINISH_SEQ_INDEX;
     s_bug_repeat_count = 0;
@@ -412,7 +404,6 @@ VOID_T app_motor_init(VOID_T)
     s_bug_repeat_count = 0;
     s_bug_pause_active = FALSE;
     s_sleep_pending = FALSE;
-    s_sleep_laser_off = FALSE;
     s_alt_phase = 0;
     s_alt_phase_elapsed_ms = 0;
     s_alt_laser_time_s = 60;
@@ -437,7 +428,6 @@ VOID_T app_motor_set_mode(game_mode_t mode)
     s_bug_repeat_count = 0;
     s_bug_pause_active = FALSE;
     s_sleep_pending = FALSE;
-    s_sleep_laser_off = FALSE;
     s_alt_phase = 0;
     s_alt_phase_elapsed_ms = 0;
     if (s_motor_enabled) {
@@ -466,7 +456,6 @@ VOID_T app_motor_enter_sleep_mode(VOID_T)
     s_bug_repeat_count = 0;
     s_bug_pause_active = FALSE;
     s_sleep_pending = FALSE;
-    s_sleep_laser_off = FALSE;
     s_alt_phase = 0;
     s_alt_phase_elapsed_ms = 0;
 }
@@ -479,7 +468,6 @@ VOID_T app_motor_wake_last_mode(VOID_T)
         s_bug_repeat_count = 0;
         s_bug_pause_active = FALSE;
         s_sleep_pending = FALSE;
-        s_sleep_laser_off = FALSE;
         s_alt_phase = 0;
         s_alt_phase_elapsed_ms = 0;
     }
@@ -516,7 +504,6 @@ VOID_T app_motor_set_alt_laser_time(UINT16_T seconds)
         s_bug_repeat_count = 0;
         s_bug_pause_active = FALSE;
         s_sleep_pending = FALSE;
-        s_sleep_laser_off = FALSE;
         app_motor_timer_handler(s_motor_timer_id, NULL);
     }
 }
@@ -539,7 +526,6 @@ VOID_T app_motor_set_alt_bug_time(UINT16_T seconds)
         s_bug_repeat_count = 0;
         s_bug_pause_active = FALSE;
         s_sleep_pending = FALSE;
-        s_sleep_laser_off = FALSE;
         app_motor_timer_handler(s_motor_timer_id, NULL);
     }
 }
@@ -568,7 +554,6 @@ VOID_T app_motor_start(VOID_T)
     s_bug_repeat_count = 0;
     s_bug_pause_active = FALSE;
     s_sleep_pending = FALSE;
-    s_sleep_laser_off = FALSE;
     s_alt_phase = 0;
     s_alt_phase_elapsed_ms = 0;
     app_motor_timer_handler(s_motor_timer_id, NULL);
@@ -581,7 +566,6 @@ VOID_T app_motor_stop(VOID_T)
     }
     s_motor_enabled = FALSE;
     s_sleep_pending = FALSE;
-    s_sleep_laser_off = FALSE;
     app_motor_all_stop();
 }
 
