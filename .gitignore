@@ -4,10 +4,8 @@ CHANGELOG.md
 LICENSE
 RELEASE.md
 _output
-apps
 components
 docs
-include
 libs
 project.json
 scripts
@@ -15,3 +13,4 @@ tmp
 vendor
 build
 README.md
+*.zip
