@@ -13,7 +13,7 @@
 #include "app_charge.h"
 #include "app_dp_parser.h"
 
-#define VARIABLE_SEQ_STEPS 3
+#define VARIABLE_SEQ_STEPS 4
 #define FIXED_SEQ_STEPS (sizeof(s_fixed_seq) / sizeof(s_fixed_seq[0]))
 #define VARIABLE_SEQ_CYCLES 5
 #define RANDOM_BURST_MS 6000
@@ -65,32 +65,53 @@ typedef struct
     UINT16_T duration_ms;
 } sm_simple_seq_step_t;
 
+#define FIX_STOP 500
 STATIC const sm_simple_seq_step_t s_fixed_seq[] = {
     {MOTOR_DIR_FORWARD, 500},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_REVERSE, 500},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_FORWARD, 500},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_REVERSE, 500},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_FORWARD, 2500},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_REVERSE, 500},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_FORWARD, 500},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_REVERSE, 500},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_FORWARD, 1000},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_REVERSE, 1500},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_FORWARD, 1000},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_REVERSE, 1000},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_FORWARD, 1000},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_REVERSE, 1000},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_FORWARD, 1000},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_REVERSE, 1500},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_FORWARD, 1000},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_REVERSE, 1000},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_FORWARD, 1000},
+    {MOTOR_DIR_STOP, FIX_STOP},
     {MOTOR_DIR_REVERSE, 1000},
     {MOTOR_DIR_STOP, 3000},
 };
 
 STATIC const sm_simple_seq_step_t s_variable_seq[VARIABLE_SEQ_STEPS] = {
     {MOTOR_DIR_FORWARD, 250},
+    {MOTOR_DIR_STOP, 100},
     {MOTOR_DIR_REVERSE, 250},
     {MOTOR_DIR_STOP, 100},
 };
