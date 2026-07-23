@@ -128,7 +128,7 @@ STATIC VOID_T battery_critical_poweroff(VOID_T)
  ********************* DP 定时上报 **************************************
  **********************************************************************/
 
-/* DP定时上报：读取缓存值，仅上报有变更的DP */
+/* DP定时上报：每秒上报开关与工作状态，避免状态停留在旧值 */
 STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
 {
     // app_led_update();
@@ -138,10 +138,8 @@ STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
     }
 
     static UINT8_T s_last_battery = 0xFF;
-    static UINT8_T s_last_switch  = 0xFF;
     static UINT8_T s_last_mode    = 0xFF;
     static UINT8_T s_last_stepless = 0xFF;
-    static UINT8_T s_last_work_state = 0xFF;
 
     UINT8_T buf[DT_VALUE_LEN] = {0};
 
@@ -159,13 +157,10 @@ STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
     /* 开关状态 */
     {
         UINT8_T power_on = app_state_is_app_power_on() ? 1 : 0;
-        if (power_on != s_last_switch) {
-            s_last_switch = power_on;
-            memset(buf, 0, DT_VALUE_LEN);
-            buf[0] = power_on;
-            app_dp_report(DP_ID_SWITCH, buf, DT_BOOL_LEN);
-            TAL_PR_DEBUG("[dp] switch report: %d", power_on);
-        }
+        memset(buf, 0, DT_VALUE_LEN);
+        buf[0] = power_on;
+        app_dp_report(DP_ID_SWITCH, buf, DT_BOOL_LEN);
+        TAL_PR_DEBUG("[dp] switch report: %d", power_on);
     }
 
     /* 工作模式 */
@@ -195,11 +190,8 @@ STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
     /* 工作状态 */
     {
         UINT8_T state = app_state_get_dp_enum();
-        if (state != s_last_work_state) {
-            s_last_work_state = state;
-            app_dp_report(DP_ID_WORK_STATE, &state, DT_ENUM_LEN);
-            TAL_PR_DEBUG("[dp] work_state report: %d", state);
-        }
+        app_dp_report(DP_ID_WORK_STATE, &state, DT_ENUM_LEN);
+        TAL_PR_DEBUG("[dp] work_state report: %d", state);
     }
 }
 

@@ -12,8 +12,9 @@
 extern "C" {
 #endif
 
-#define WORK_PERIOD_MS      (10 * 60 * 1000UL)
-#define SLEEP_PERIOD_MS     (5 * 60 * 1000UL)
+#define WORK_PERIOD_MS      (10 * 1 * 1000UL)
+#define SLEEP_PERIOD_MS     (5 * 1 * 1000UL)
+#define WORK_SLEEP_CYCLES   5
 
 typedef enum {
     DEV_STATE_WORK        = 0,
