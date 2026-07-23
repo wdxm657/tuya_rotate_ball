@@ -51,6 +51,12 @@ STATIC BOOL_T app_led_is_connected(VOID_T)
     return tuya_app_get_conn_handle() != 0xFFFF;
 }
 
+STATIC BOOL_T app_led_is_pairing(VOID_T)
+{
+    tuya_ble_connect_status_t st = tuya_ble_connect_status_get();
+    return (st == BONDING_CONN || st == BONDING_UNCONN);
+}
+
 STATIC BOOL_T app_led_mode_blinks(led_mode_t mode)
 {
     return (mode == LED_MODE_BLUE_BLINK ||
@@ -138,15 +144,16 @@ VOID_T app_led_update(VOID_T)
 {
     led_mode_t status_mode;
     BOOL_T connected = app_led_is_connected();
+    BOOL_T paired = app_led_is_pairing();
 
     if (!app_state_is_machine_powered_on()) {
         status_mode = LED_MODE_OFF;
     } else if (app_state_is_low_voltage_locked() || app_battery_is_low()) {
         status_mode = LED_MODE_RED_BLINK;
     } else if (!app_state_is_app_power_on()) {
-        status_mode = connected ? LED_MODE_BLUE_SOLID : LED_MODE_BLUE_BLINK;
+        status_mode = (connected && paired) ? LED_MODE_BLUE_SOLID : LED_MODE_BLUE_BLINK;
     } else {
-        status_mode = connected ? LED_MODE_GREEN_SOLID : LED_MODE_GREEN_BLINK;
+        status_mode = (connected && paired) ? LED_MODE_GREEN_SOLID : LED_MODE_GREEN_BLINK;
     }
 
     if (status_mode == s_status_mode) {

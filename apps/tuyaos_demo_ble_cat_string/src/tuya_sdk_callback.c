@@ -131,7 +131,7 @@ STATIC VOID_T battery_critical_poweroff(VOID_T)
 /* DP定时上报：每秒上报开关与工作状态，避免状态停留在旧值 */
 STATIC VOID_T dp_report_timeout_handler(TIMER_ID timer_id, VOID_T *arg)
 {
-    // app_led_update();
+    app_led_update();
 
     if(tal_app_server_conn_handle == 0XFFFF){
         return;

@@ -148,10 +148,11 @@ VOID_T app_led_update(VOID_T)
     led_mode_t power_mode = LED_MODE_OFF;
 
     if (app_state_is_machine_powered_on()) {
-        if (!app_state_is_app_power_on()) {
-            status_mode = LED_MODE_BLUE_BLINK;
-        } else if (!app_led_is_pairing()) {
+
+         if (!app_led_is_pairing()) 
             status_mode = LED_MODE_BLUE_SOLID;
+        else if(!app_state_is_app_power_on()) {
+            status_mode = LED_MODE_BLUE_BLINK;
         } else if (app_state_get() != DEV_STATE_SLEEP) {
             status_mode = LED_MODE_GREEN_BLINK;
         }else{

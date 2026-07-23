@@ -176,14 +176,11 @@ STATIC VOID_T app_key_poll_handler(TIMER_ID timer_id, VOID_T *arg)
                         TAL_PR_INFO("[key] long press release (%dms) -> pairing",
                                     press_duration);
                         app_state_set_power(TRUE);
-                        if (tuya_app_get_conn_handle() != 0xFFFF) {
-                            tuya_ble_gap_disconnect();
-                        }
-                        tuya_ble_device_unbind();
+                        tuya_ble_device_factory_reset();
                     } else {
-                        /* 开机3s内的短按不做处理（防止唤醒按键被误认为进入低功耗） */
-                        if (s_boot_tick_ms != 0 && (now_ms - s_boot_tick_ms) < 3000) {
-                            TAL_PR_DEBUG("[key] short press ignored (within 3s of boot)");
+                        /* 开机1s内的短按不做处理（防止唤醒按键被误认为进入低功耗） */
+                        if (s_boot_tick_ms != 0 && (now_ms - s_boot_tick_ms) < 1000) {
+                            TAL_PR_DEBUG("[key] short press ignored (within 1s of boot)");
                         } else {
                             /* 短按松开 -> 进入低功耗 */
                             TAL_PR_INFO("[key] short press release (%dms) -> toggle machine power",
